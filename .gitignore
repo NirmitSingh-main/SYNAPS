@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Data and trained artifacts
+data/raw/*
+data/processed/*
+models/*
+!data/raw/**/
+!data/raw/**/.gitkeep
+!data/processed/**/
+!data/processed/**/.gitkeep
+!models/**/
+!models/**/.gitkeep
+*.iq
+*.wav
+*.bin
+*.pt
+*.pth
+*.onnx
+
+# Notebooks and local tooling
+.ipynb_checkpoints/
+.env
+.vscode/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
