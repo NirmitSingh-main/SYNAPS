@@ -1,36 +1,126 @@
+# ============================================================
+# SYNAPS - .gitignore
+# ============================================================
+
+# ----------------------------
 # Python
+# ----------------------------
 __pycache__/
 *.py[cod]
-*.egg-info/
+*.pyo
+*.pyd
+
+# ----------------------------
+# Virtual environments
+# ----------------------------
 .venv/
 venv/
+env/
+ENV/
+
+# ----------------------------
+# Testing / coverage
+# ----------------------------
 .pytest_cache/
-.mypy_cache/
 .coverage
 htmlcov/
+.mypy_cache/
+.ruff_cache/
 
-# Data and trained artifacts
-data/raw/*
-data/processed/*
-models/*
-!data/raw/**/
-!data/raw/**/.gitkeep
-!data/processed/**/
-!data/processed/**/.gitkeep
-!models/**/
-!models/**/.gitkeep
-*.iq
-*.wav
-*.bin
+# ----------------------------
+# IDE
+# ----------------------------
+.vscode/
+.idea/
+
+# ----------------------------
+# OS
+# ----------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----------------------------
+# Environment / secrets
+# ----------------------------
+.env
+.env.*
+!.env.example
+
+# ----------------------------
+# Logs
+# ----------------------------
+*.log
+logs/
+
+# ----------------------------
+# Temporary files
+# ----------------------------
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# ----------------------------
+# Build / packaging
+# ----------------------------
+build/
+dist/
+*.egg-info/
+
+# ============================================================
+# DATABASE
+# ============================================================
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Database backups
+*.db.bak
+*.sqlite.bak
+*.sqlite3.bak
+
+# IMPORTANT:
+# Keep database schema/migrations/scripts tracked.
+# Example:
+# database/schema.sql
+# database/migrations/
+# database/seed.py
+
+# ============================================================
+# AI / ML GENERATED MODELS
+# ============================================================
+
+*.pkl
+*.joblib
+*.h5
+*.keras
 *.pt
 *.pth
 *.onnx
 
-# Notebooks and local tooling
-.ipynb_checkpoints/
-.env
-.vscode/
+# ============================================================
+# GENERATED OUTPUT
+# ============================================================
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
+outputs/
+results/
+reports/
+plots/
+figures/
+
+# ============================================================
+# DATASET
+# ============================================================
+
+# DO NOT ignore data/
+# Your signal dataset and metadata are part of the project.
+
+# ============================================================
+# CACHE
+# ============================================================
+
+.cache/

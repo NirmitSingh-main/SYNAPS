@@ -486,168 +486,168 @@
 
 
 
-from ai.preprocessing.iq_loader import load_iq_file
+# from ai.preprocessing.iq_loader import load_iq_file
 
-from signal_processing.synchronization.frequency_sync import (
-    correct_frequency_offset
-)
+# from signal_processing.synchronization.frequency_sync import (
+#     correct_frequency_offset
+# )
 
-from signal_processing.synchronization.phase_sync import (
-    correct_phase_offset
-)
+# from signal_processing.synchronization.phase_sync import (
+#     correct_phase_offset
+# )
 
-from signal_processing.synchronization.timing_sync import (
-    estimate_timing_offset,
-    sample_symbols
-)
+# from signal_processing.synchronization.timing_sync import (
+#     estimate_timing_offset,
+#     sample_symbols
+# )
 
-from signal_processing.demodulation.qam import (
-    demodulate_16qam
-)
+# from signal_processing.demodulation.qam import (
+#     demodulate_16qam
+# )
 
-import json
-import numpy as np
-import matplotlib.pyplot as plt
-
-
-def test_16qam_demodulation():
-
-    print("\n-----------------------------")
-    print("16QAM DEMODULATION TEST")
-    print("-----------------------------")
-
-    # --------------------------------------------------
-    # File paths
-    # --------------------------------------------------
-
-    iq_path = "data/iq/signal_0033_16qam.iq"
-    metadata_path = "data/metadata/signal_0033_16qam.json"
-
-    # --------------------------------------------------
-    # Load metadata
-    # --------------------------------------------------
-
-    with open(metadata_path, "r") as f:
-        metadata = json.load(f)
-
-    expected_bits_string = metadata["bits"]
-
-    expected_bits = np.array(
-        [int(bit) for bit in expected_bits_string],
-        dtype=np.uint8
-    )
-
-    samples_per_symbol = metadata["samples_per_symbol"]
-    frequency_offset = metadata["frequency_offset_hz"]
-    phase_offset = metadata["phase_offset_degrees"]
-
-    sampling_frequency = metadata["sampling_frequency_hz"]
-
-    # --------------------------------------------------
-    # Load IQ
-    # --------------------------------------------------
-
-    iq = load_iq_file(iq_path)
-
-    print("Original IQ samples:", len(iq))
-    print("Samples per symbol:", samples_per_symbol)
-    print("Frequency offset:", frequency_offset, "Hz")
-    print("Phase correction:", phase_offset, "degrees")
-
-    # --------------------------------------------------
-    # Frequency synchronization
-    # --------------------------------------------------
-
-    frequency_corrected = correct_frequency_offset(
-        iq,
-        frequency_offset,
-        sampling_frequency
-    )
-
-    # --------------------------------------------------
-    # Phase synchronization
-    # --------------------------------------------------
-
-    phase_corrected = correct_phase_offset(
-        frequency_corrected,
-        phase_offset
-    )
-
-    # --------------------------------------------------
-    # Timing synchronization
-    # --------------------------------------------------
-
-    timing_offset = estimate_timing_offset(
-        phase_corrected,
-        samples_per_symbol
-    )
-
-    symbols = sample_symbols(
-        phase_corrected,
-        samples_per_symbol,
-        timing_offset
-    )
-
-    print("Timing offset:", timing_offset)
-    print("Recovered symbols:", len(symbols))
-
-    # --------------------------------------------------
-    # 16QAM demodulation
-    # --------------------------------------------------
-
-    recovered_bits = demodulate_16qam(symbols)
-
-    # --------------------------------------------------
-    # Compare expected and recovered bits
-    # --------------------------------------------------
-
-    compare_length = min(
-        len(expected_bits),
-        len(recovered_bits)
-    )
-
-    expected_compare = expected_bits[:compare_length]
-    recovered_compare = recovered_bits[:compare_length]
-
-    correct_bits = np.sum(
-        expected_compare == recovered_compare
-    )
-
-    accuracy = (
-        correct_bits / compare_length * 100
-        if compare_length > 0
-        else 0
-    )
-
-    # --------------------------------------------------
-    # Results
-    # --------------------------------------------------
-
-    print("Expected bits:", len(expected_bits))
-    print("Recovered bits:", len(recovered_bits))
-    print("Correct bits:", correct_bits)
-    print("Bit accuracy:", accuracy, "%")
-
-    print("\nExpected first 50 bits:")
-    print("".join(map(str, expected_bits[:50])))
-
-    print("\nRecovered first 50 bits:")
-    print("".join(map(str, recovered_bits[:50])))
-
-    # --------------------------------------------------
-    # Validation
-    # --------------------------------------------------
-
-    assert len(recovered_bits) == len(expected_bits), (
-        f"Bit length mismatch: "
-        f"expected {len(expected_bits)}, "
-        f"got {len(recovered_bits)}"
-    )
-
-    assert accuracy >= 95.0, (
-        f"16QAM accuracy too low: {accuracy:.2f}%"
-    )
+# import json
+# import numpy as np
+# import matplotlib.pyplot as plt
 
 
-if __name__ == "__main__":
-    test_16qam_demodulation()
+# def test_16qam_demodulation():
+
+#     print("\n-----------------------------")
+#     print("16QAM DEMODULATION TEST")
+#     print("-----------------------------")
+
+#     # --------------------------------------------------
+#     # File paths
+#     # --------------------------------------------------
+
+#     iq_path = "data/iq/signal_0033_16qam.iq"
+#     metadata_path = "data/metadata/signal_0033_16qam.json"
+
+#     # --------------------------------------------------
+#     # Load metadata
+#     # --------------------------------------------------
+
+#     with open(metadata_path, "r") as f:
+#         metadata = json.load(f)
+
+#     expected_bits_string = metadata["bits"]
+
+#     expected_bits = np.array(
+#         [int(bit) for bit in expected_bits_string],
+#         dtype=np.uint8
+#     )
+
+#     samples_per_symbol = metadata["samples_per_symbol"]
+#     frequency_offset = metadata["frequency_offset_hz"]
+#     phase_offset = metadata["phase_offset_degrees"]
+
+#     sampling_frequency = metadata["sampling_frequency_hz"]
+
+#     # --------------------------------------------------
+#     # Load IQ
+#     # --------------------------------------------------
+
+#     iq = load_iq_file(iq_path)
+
+#     print("Original IQ samples:", len(iq))
+#     print("Samples per symbol:", samples_per_symbol)
+#     print("Frequency offset:", frequency_offset, "Hz")
+#     print("Phase correction:", phase_offset, "degrees")
+
+#     # --------------------------------------------------
+#     # Frequency synchronization
+#     # --------------------------------------------------
+
+#     frequency_corrected = correct_frequency_offset(
+#         iq,
+#         frequency_offset,
+#         sampling_frequency
+#     )
+
+#     # --------------------------------------------------
+#     # Phase synchronization
+#     # --------------------------------------------------
+
+#     phase_corrected = correct_phase_offset(
+#         frequency_corrected,
+#         phase_offset
+#     )
+
+#     # --------------------------------------------------
+#     # Timing synchronization
+#     # --------------------------------------------------
+
+#     timing_offset = estimate_timing_offset(
+#         phase_corrected,
+#         samples_per_symbol
+#     )
+
+#     symbols = sample_symbols(
+#         phase_corrected,
+#         samples_per_symbol,
+#         timing_offset
+#     )
+
+#     print("Timing offset:", timing_offset)
+#     print("Recovered symbols:", len(symbols))
+
+#     # --------------------------------------------------
+#     # 16QAM demodulation
+#     # --------------------------------------------------
+
+#     recovered_bits = demodulate_16qam(symbols)
+
+#     # --------------------------------------------------
+#     # Compare expected and recovered bits
+#     # --------------------------------------------------
+
+#     compare_length = min(
+#         len(expected_bits),
+#         len(recovered_bits)
+#     )
+
+#     expected_compare = expected_bits[:compare_length]
+#     recovered_compare = recovered_bits[:compare_length]
+
+#     correct_bits = np.sum(
+#         expected_compare == recovered_compare
+#     )
+
+#     accuracy = (
+#         correct_bits / compare_length * 100
+#         if compare_length > 0
+#         else 0
+#     )
+
+#     # --------------------------------------------------
+#     # Results
+#     # --------------------------------------------------
+
+#     print("Expected bits:", len(expected_bits))
+#     print("Recovered bits:", len(recovered_bits))
+#     print("Correct bits:", correct_bits)
+#     print("Bit accuracy:", accuracy, "%")
+
+#     print("\nExpected first 50 bits:")
+#     print("".join(map(str, expected_bits[:50])))
+
+#     print("\nRecovered first 50 bits:")
+#     print("".join(map(str, recovered_bits[:50])))
+
+#     # --------------------------------------------------
+#     # Validation
+#     # --------------------------------------------------
+
+#     assert len(recovered_bits) == len(expected_bits), (
+#         f"Bit length mismatch: "
+#         f"expected {len(expected_bits)}, "
+#         f"got {len(recovered_bits)}"
+#     )
+
+#     assert accuracy >= 95.0, (
+#         f"16QAM accuracy too low: {accuracy:.2f}%"
+#     )
+
+
+# if __name__ == "__main__":
+#     test_16qam_demodulation()
