@@ -1,1 +1,3 @@
-# Runtime dependencies will be added as implementation begins.
+numpy
+scipy
+pytest

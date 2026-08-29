@@ -4,6 +4,8 @@ from typing import Optional, Tuple
 import numpy as np
 from scipy.io import wavfile
 
+from .format_detection import detect_format
+
 
 def load_signal(
     file_path: str,
@@ -24,8 +26,8 @@ def load_signal(
 
     iq_sample_rate : float, optional
         Sampling rate for raw .iq files.
-        Required because raw IQ files do not contain sampling-rate
-        information themselves.
+        Required because raw IQ files do not contain
+        sampling-rate information.
 
     Returns
     -------
@@ -46,25 +48,40 @@ def load_signal(
 
     path = Path(file_path)
 
+    # Check file existence
     if not path.exists():
-        raise FileNotFoundError(f"Signal file not found: {file_path}")
+        raise FileNotFoundError(
+            f"Signal file not found: {file_path}"
+        )
 
-    extension = path.suffix.lower()
+    # Check that it is actually a file
+    if not path.is_file():
+        raise ValueError(
+            f"Input path is not a file: {file_path}"
+        )
 
-    if extension == ".wav":
+    # Use the central format detector
+    signal_format = detect_format(file_path)
+
+    if signal_format == "WAV":
         return _load_wav(path, iq_dtype)
 
-    if extension == ".iq":
+    if signal_format == "IQ":
         if iq_sample_rate is None:
             raise ValueError(
                 "Sampling rate must be provided for raw .iq files."
             )
 
-        return _load_iq(path, iq_dtype, iq_sample_rate)
+        return _load_iq(
+            path,
+            iq_dtype,
+            iq_sample_rate,
+        )
 
+    # This should normally never be reached because
+    # detect_format() already validates the format.
     raise ValueError(
-        f"Unsupported signal format: {extension}. "
-        "Supported formats are .wav and .iq."
+        f"Unsupported signal format: {signal_format}"
     )
 
 
@@ -79,26 +96,31 @@ def _load_wav(
         Channel 1 -> I
         Channel 2 -> Q
 
-    A mono WAV file is also accepted and treated as a real-valued
-    signal with Q = 0.
+    A mono WAV file is also accepted and treated as
+    a real-valued signal with Q = 0.
     """
 
     sample_rate, data = wavfile.read(path)
 
     data = np.asarray(data)
 
+    # Mono WAV
     if data.ndim == 1:
-        # Mono WAV
-        samples = data.astype(np.float32).astype(iq_dtype)
 
+        samples = (
+            data.astype(np.float32)
+            .astype(iq_dtype)
+        )
+
+    # Stereo WAV: I + Q
     elif data.ndim == 2 and data.shape[1] == 2:
-        # Stereo WAV:
-        # Channel 0 = I
-        # Channel 1 = Q
+
         i = data[:, 0].astype(np.float32)
         q = data[:, 1].astype(np.float32)
 
-        samples = (i + 1j * q).astype(iq_dtype)
+        samples = (
+            i + 1j * q
+        ).astype(iq_dtype)
 
     else:
         raise ValueError(
@@ -117,26 +139,37 @@ def _load_iq(
     """
     Load a raw IQ file.
 
-    Expected format:
+    Expected synthetic format:
+
         I0, Q0, I1, Q1, I2, Q2, ...
 
     Samples are assumed to be stored as float32.
     """
 
-    raw_data = np.fromfile(path, dtype=np.float32)
+    raw_data = np.fromfile(
+        path,
+        dtype=np.float32,
+    )
 
+    # Empty IQ file
     if raw_data.size == 0:
-        raise ValueError("IQ file is empty.")
+        raise ValueError(
+            "IQ file is empty."
+        )
 
+    # Every I value must have a corresponding Q value
     if raw_data.size % 2 != 0:
         raise ValueError(
-            "Invalid IQ file: the number of values must be even "
-            "because samples are stored as I/Q pairs."
+            "Invalid IQ file: the number of values "
+            "must be even because samples are stored "
+            "as I/Q pairs."
         )
 
     i = raw_data[0::2]
     q = raw_data[1::2]
 
-    samples = (i + 1j * q).astype(iq_dtype)
+    samples = (
+        i + 1j * q
+    ).astype(iq_dtype)
 
     return samples, float(sample_rate)
