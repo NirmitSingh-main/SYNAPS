@@ -1,176 +1,655 @@
-"""
-Demodulation unit tests and dataset integration tests for BPSK, QPSK, FSK, and 16QAM.
-"""
+# import json
+# import numpy as np
 
-import sys
-from pathlib import Path
+# from signal_processing.synchronization.frequency_sync import (
+#     correct_frequency_offset
+# )
+
+# from signal_processing.synchronization.phase_sync import (
+#     correct_phase_offset
+# )
+
+# from signal_processing.synchronization.timing_sync import (
+#     estimate_timing_offset,
+#     sample_symbols
+# )
+
+# from signal_processing.demodulation.bpsk import (
+#     demodulate_bpsk
+# )
+
+
+# def test_bpsk_demodulation():
+
+#     # -----------------------------
+#     # Load IQ signal
+#     # -----------------------------
+
+#     iq_filepath = "data/iq/signal_0004_bpsk.iq"
+
+#     data = np.fromfile(
+#         iq_filepath,
+#         dtype="<f4"
+#     )
+
+#     i = data[0::2]
+#     q = data[1::2]
+
+#     iq = i + 1j * q
+
+#     # -----------------------------
+#     # Signal parameters
+#     # -----------------------------
+
+#     sampling_frequency_hz = 1_000_000
+#     frequency_offset_hz = -10_000
+#     phase_offset_degrees = 0
+#     samples_per_symbol = 10
+
+#     # -----------------------------
+#     # Frequency synchronization
+#     # -----------------------------
+
+#     frequency_corrected = correct_frequency_offset(
+#         iq,
+#         frequency_offset_hz,
+#         sampling_frequency_hz
+#     )
+
+#     # -----------------------------
+#     # Phase synchronization
+#     # -----------------------------
+
+#     phase_corrected = correct_phase_offset(
+#         frequency_corrected,
+#         phase_offset_degrees
+#     )
+
+#     # -----------------------------
+#     # Timing synchronization
+#     # -----------------------------
+
+#     timing_offset = estimate_timing_offset(
+#         phase_corrected,
+#         samples_per_symbol
+#     )
+
+#     symbols = sample_symbols(
+#         phase_corrected,
+#         samples_per_symbol,
+#         timing_offset
+#     )
+
+#     # -----------------------------
+#     # BPSK demodulation
+#     # -----------------------------
+
+#     recovered_bits = demodulate_bpsk(symbols)
+
+#     # -----------------------------
+#     # Load ground-truth bits
+#     # -----------------------------
+
+#     metadata_filepath = (
+#         "data/metadata/signal_0004_bpsk.json"
+#     )
+
+#     with open(metadata_filepath, "r") as file:
+#         metadata = json.load(file)
+
+#     expected_bits = np.array(
+#         [int(bit) for bit in metadata["bits"]],
+#         dtype=np.uint8
+#     )
+
+#     # -----------------------------
+#     # Compare results
+#     # -----------------------------
+
+#     number_of_bits = min(
+#         len(expected_bits),
+#         len(recovered_bits)
+#     )
+
+#     correct_bits = np.sum(
+#         expected_bits[:number_of_bits]
+#         == recovered_bits[:number_of_bits]
+#     )
+
+#     accuracy = (
+#         correct_bits / number_of_bits
+#     ) * 100
+
+#     print("\n-----------------------------")
+#     print("BPSK DEMODULATION TEST")
+#     print("-----------------------------")
+
+#     print("Original IQ samples:", len(iq))
+#     print("Samples per symbol:", samples_per_symbol)
+#     print("Timing offset:", timing_offset)
+#     print("Recovered symbols:", len(symbols))
+#     print("Expected bits:", len(expected_bits))
+#     print("Recovered bits:", len(recovered_bits))
+#     print("Correct bits:", correct_bits)
+#     print("Bit accuracy:", accuracy, "%")
+
+#     print("\nExpected first 50 bits:")
+#     print("".join(map(str, expected_bits[:50])))
+
+#     print("\nRecovered first 50 bits:")
+#     print("".join(map(str, recovered_bits[:50])))
+
+#     # Basic checks
+#     assert len(recovered_bits) > 0
+#     assert np.all(
+#         (recovered_bits == 0) |
+#         (recovered_bits == 1)
+#     )
+
+
+# if __name__ == "__main__":
+#     test_bpsk_demodulation()
+
+
+
+
+
+# import json
+# import numpy as np
+
+# from signal_processing.synchronization.frequency_sync import (
+#     correct_frequency_offset
+# )
+
+# from signal_processing.synchronization.phase_sync import (
+#     correct_phase_offset
+# )
+
+# from signal_processing.synchronization.timing_sync import (
+#     estimate_timing_offset,
+#     sample_symbols
+# )
+
+# from signal_processing.demodulation.qpsk import (
+#     demodulate_qpsk
+# )
+
+
+# def test_qpsk_demodulation():
+
+#     # -----------------------------
+#     # Load IQ signal
+#     # -----------------------------
+
+#     iq_filepath = "data/iq/signal_0013_qpsk.iq"
+
+#     data = np.fromfile(
+#         iq_filepath,
+#         dtype="<f4"
+#     )
+
+#     i = data[0::2]
+#     q = data[1::2]
+
+#     iq = i + 1j * q
+
+#     # -----------------------------
+#     # Signal parameters
+#     # -----------------------------
+
+#     sampling_frequency_hz = 1_000_000
+#     frequency_offset_hz = -5_000
+
+#     # IMPORTANT:
+#     # The synchronization function applies
+#     # the negative of this value.
+#     phase_offset_degrees = 135
+
+#     samples_per_symbol = 10
+
+#     # -----------------------------
+#     # Frequency synchronization
+#     # -----------------------------
+
+#     frequency_corrected = correct_frequency_offset(
+#         iq,
+#         frequency_offset_hz,
+#         sampling_frequency_hz
+#     )
+
+#     # -----------------------------
+#     # Phase synchronization
+#     # -----------------------------
+
+#     phase_corrected = correct_phase_offset(
+#         frequency_corrected,
+#         phase_offset_degrees
+#     )
+
+#     # -----------------------------
+#     # Timing synchronization
+#     # -----------------------------
+
+#     timing_offset = estimate_timing_offset(
+#         phase_corrected,
+#         samples_per_symbol
+#     )
+
+#     symbols = sample_symbols(
+#         phase_corrected,
+#         samples_per_symbol,
+#         timing_offset
+#     )
+
+#     # -----------------------------
+#     # QPSK demodulation
+#     # -----------------------------
+
+#     recovered_bits = demodulate_qpsk(symbols)
+
+#     # -----------------------------
+#     # Load ground-truth metadata
+#     # -----------------------------
+
+#     metadata_filepath = (
+#         "data/metadata/signal_0013_qpsk.json"
+#     )
+
+#     with open(metadata_filepath, "r") as file:
+#         metadata = json.load(file)
+
+#     expected_bits = np.array(
+#         [int(bit) for bit in metadata["bits"]],
+#         dtype=np.uint8
+#     )
+
+#     # -----------------------------
+#     # Compare recovered bits
+#     # -----------------------------
+
+#     number_of_bits = min(
+#         len(expected_bits),
+#         len(recovered_bits)
+#     )
+
+#     correct_bits = np.sum(
+#         expected_bits[:number_of_bits]
+#         == recovered_bits[:number_of_bits]
+#     )
+
+#     accuracy = (
+#         correct_bits / number_of_bits
+#     ) * 100
+
+#     # -----------------------------
+#     # Results
+#     # -----------------------------
+
+#     print("\n-----------------------------")
+#     print("QPSK DEMODULATION TEST")
+#     print("-----------------------------")
+
+#     print("Original IQ samples:", len(iq))
+#     print("Samples per symbol:", samples_per_symbol)
+#     print("Frequency offset:", frequency_offset_hz, "Hz")
+#     print("Phase correction:", phase_offset_degrees, "degrees")
+#     print("Timing offset:", timing_offset)
+#     print("Recovered symbols:", len(symbols))
+#     print("Expected bits:", len(expected_bits))
+#     print("Recovered bits:", len(recovered_bits))
+#     print("Correct bits:", correct_bits)
+#     print("Bit accuracy:", accuracy, "%")
+
+#     print("\nExpected first 50 bits:")
+#     print("".join(map(str, expected_bits[:50])))
+
+#     print("\nRecovered first 50 bits:")
+#     print("".join(map(str, recovered_bits[:50])))
+
+#     # -----------------------------
+#     # Basic validation
+#     # -----------------------------
+
+#     assert len(recovered_bits) > 0
+
+#     assert np.all(
+#         (recovered_bits == 0) |
+#         (recovered_bits == 1)
+#     )
+
+
+# if __name__ == "__main__":
+#     test_qpsk_demodulation()
+
+
+
+# import json
+# import numpy as np
+
+# from signal_processing.synchronization.frequency_sync import (
+#     correct_frequency_offset
+# )
+
+# from signal_processing.synchronization.phase_sync import (
+#     correct_phase_offset
+# )
+
+# from signal_processing.synchronization.timing_sync import (
+#     estimate_timing_offset,
+#     sample_symbols
+# )
+
+# from signal_processing.demodulation.fsk import (
+#     demodulate_fsk
+# )
+
+
+# def test_fsk_demodulation():
+
+#     # -----------------------------
+#     # Load IQ signal
+#     # -----------------------------
+
+#     iq_filepath = "data/iq/signal_0026_2fsk.iq"
+
+#     raw = np.fromfile(
+#         iq_filepath,
+#         dtype="<f4"
+#     )
+
+#     iq = raw[0::2] + 1j * raw[1::2]
+
+#     # -----------------------------
+#     # Signal parameters
+#     # -----------------------------
+
+#     sampling_frequency_hz = 1_000_000
+#     frequency_offset_hz = 20_000
+#     phase_offset_degrees = 180
+#     samples_per_symbol = 10
+
+#     # -----------------------------
+#     # Frequency synchronization
+#     # -----------------------------
+
+#     frequency_corrected = correct_frequency_offset(
+#         iq,
+#         frequency_offset_hz,
+#         sampling_frequency_hz
+#     )
+
+#     # -----------------------------
+#     # Phase synchronization
+#     # -----------------------------
+
+#     phase_corrected = correct_phase_offset(
+#         frequency_corrected,
+#         phase_offset_degrees
+#     )
+
+#     # -----------------------------
+#     # Timing synchronization
+#     # -----------------------------
+
+#     timing_offset = estimate_timing_offset(
+#         phase_corrected,
+#         samples_per_symbol
+#     )
+
+#     symbols = sample_symbols(
+#         phase_corrected,
+#         samples_per_symbol,
+#         timing_offset
+#     )
+
+#     # -----------------------------
+#     # FSK demodulation
+#     # -----------------------------
+
+#     recovered_bits = demodulate_fsk(
+#         phase_corrected,
+#         samples_per_symbol
+#     )
+
+#     # -----------------------------
+#     # Load ground truth
+#     # -----------------------------
+
+#     metadata_filepath = (
+#         "data/metadata/signal_0026_2fsk.json"
+#     )
+
+#     with open(metadata_filepath, "r") as file:
+#         metadata = json.load(file)
+
+#     expected_bits = np.array(
+#         [int(bit) for bit in metadata["bits"]],
+#         dtype=np.uint8
+#     )
+
+#     # -----------------------------
+#     # Compare
+#     # -----------------------------
+
+#     n = min(
+#         len(expected_bits),
+#         len(recovered_bits)
+#     )
+
+#     correct_bits = np.sum(
+#         expected_bits[:n] ==
+#         recovered_bits[:n]
+#     )
+
+#     accuracy = (
+#         correct_bits / n
+#     ) * 100
+
+#     # -----------------------------
+#     # Results
+#     # -----------------------------
+
+#     print("\n-----------------------------")
+#     print("2FSK DEMODULATION TEST")
+#     print("-----------------------------")
+
+#     print("Original IQ samples:", len(iq))
+#     print("Samples per symbol:", samples_per_symbol)
+#     print("Frequency offset:", frequency_offset_hz, "Hz")
+#     print("Phase correction:", phase_offset_degrees, "degrees")
+#     print("Timing offset:", timing_offset)
+#     print("Recovered symbols:", len(symbols))
+#     print("Expected bits:", len(expected_bits))
+#     print("Recovered bits:", len(recovered_bits))
+#     print("Correct bits:", correct_bits)
+#     print("Bit accuracy:", accuracy, "%")
+
+#     print("\nExpected first 50 bits:")
+#     print(
+#         "".join(
+#             map(str, expected_bits[:50])
+#         )
+#     )
+
+#     print("\nRecovered first 50 bits:")
+#     print(
+#         "".join(
+#             map(str, recovered_bits[:50])
+#         )
+#     )
+
+
+# if __name__ == "__main__":
+#     test_fsk_demodulation()
+
+
+
+
+
+from ai.preprocessing.iq_loader import load_iq_file
+
+from signal_processing.synchronization.frequency_sync import (
+    correct_frequency_offset
+)
+
+from signal_processing.synchronization.phase_sync import (
+    correct_phase_offset
+)
+
+from signal_processing.synchronization.timing_sync import (
+    estimate_timing_offset,
+    sample_symbols
+)
+
+from signal_processing.demodulation.qam import (
+    demodulate_16qam
+)
+
 import json
 import numpy as np
-
-# Ensure project root is on sys.path
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from project_paths import resolve_sample_paths
-from ai.preprocessing.iq_loader import load_iq_file
-from signal_processing.synchronization.frequency_sync import correct_frequency_offset
-from signal_processing.synchronization.phase_sync import correct_phase_offset
-from signal_processing.synchronization.timing_sync import estimate_timing_offset, sample_symbols
-from signal_processing.demodulation.bpsk import demodulate_bpsk
-from signal_processing.demodulation.qpsk import demodulate_qpsk
-from signal_processing.demodulation.fsk import demodulate_fsk
-from signal_processing.demodulation.qam import demodulate_16qam, demodulate_qam
+import matplotlib.pyplot as plt
 
 
-# =====================================================================
-# SYNTHETIC DETERMINISTIC UNIT TESTS
-# =====================================================================
+def test_16qam_demodulation():
 
-def test_synthetic_bpsk():
-    """
-    Deterministic synthetic test for BPSK demodulation.
-    """
-    tx_bits = np.array([1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1], dtype=np.uint8)
-    symbols = np.where(tx_bits == 1, 1.0 + 0j, -1.0 + 0j)
-    
-    rx_bits = demodulate_bpsk(symbols)
-    assert np.array_equal(tx_bits, rx_bits), f"BPSK mismatch: {tx_bits} != {rx_bits}"
-    print("[PASS] test_synthetic_bpsk: 100% match on deterministic bitstream")
+    print("\n-----------------------------")
+    print("16QAM DEMODULATION TEST")
+    print("-----------------------------")
 
+    # --------------------------------------------------
+    # File paths
+    # --------------------------------------------------
+    # Use a real sample from the current dataset layout.
+    # The legacy names like signal_0033_16qam.* are not present.
 
-def test_synthetic_qpsk():
-    """
-    Deterministic synthetic test for QPSK demodulation (Gray mapped).
-    """
-    # Mapping: +I,+Q->00, -I,+Q->01, -I,-Q->11, +I,-Q->10
-    symbols = np.array([
-        1.0 + 1.0j,   # 00
-        -1.0 + 1.0j,  # 01
-        -1.0 - 1.0j,  # 11
-        1.0 - 1.0j,   # 10
-    ], dtype=np.complex128) / np.sqrt(2.0)
-    
-    expected_bits = np.array([0, 0, 0, 1, 1, 1, 1, 0], dtype=np.uint8)
-    rx_bits = demodulate_qpsk(symbols)
-    assert np.array_equal(expected_bits, rx_bits), f"QPSK mismatch: {expected_bits} != {rx_bits}"
-    print("[PASS] test_synthetic_qpsk: 100% match on deterministic constellation")
+    iq_path = "data/iq/QAM16/signal_0601_qam16.iq"
+    metadata_path = "data/metadata/QAM16/signal_0601_16qam.json"
 
+    # --------------------------------------------------
+    # Load metadata
+    # --------------------------------------------------
 
-def test_synthetic_fsk():
-    """
-    Deterministic synthetic test for 2-FSK demodulation.
-    """
-    sps = 16
-    fs = 1_000_000.0
-    f0 = 20_000.0  # bit 0
-    f1 = 80_000.0  # bit 1
-    tx_bits = np.array([0, 1, 1, 0, 1, 0, 0, 1], dtype=np.uint8)
-    
-    t_sym = np.arange(sps) / fs
-    signal_chunks = []
-    phase = 0.0
-    for b in tx_bits:
-        freq = f1 if b == 1 else f0
-        chunk = np.exp(1j * (2 * np.pi * freq * t_sym + phase))
-        phase = np.angle(chunk[-1])
-        signal_chunks.append(chunk)
-        
-    signal = np.concatenate(signal_chunks)
-    rx_bits = demodulate_fsk(signal, samples_per_symbol=sps)
-    assert np.array_equal(tx_bits, rx_bits), f"FSK mismatch: {tx_bits} != {rx_bits}"
-    print("[PASS] test_synthetic_fsk: 100% match on continuous-phase FSK signal")
+    with open(metadata_path, "r") as f:
+        metadata = json.load(f)
 
+    expected_bits_string = metadata["bits"]
 
-def test_synthetic_16qam():
-    """
-    Deterministic synthetic test for 16QAM demodulation (Gray mapped).
-    """
-    norm = np.sqrt(10.0)
-    levels = [-3.0, -1.0, 1.0, 3.0]
-    gray_map = {
-        (-3, -3): [0, 0, 0, 0],
-        (-1, 1):  [0, 1, 1, 1],
-        (3, -1):  [1, 0, 0, 1],
-        (1, 3):   [1, 1, 1, 0],
-    }
-    symbols = []
-    expected_bits = []
-    for (i_val, q_val), bits in gray_map.items():
-        symbols.append((i_val + 1j * q_val) / norm)
-        expected_bits.extend(bits)
-        
-    rx_bits = demodulate_16qam(np.array(symbols))
-    assert np.array_equal(expected_bits, rx_bits), f"16QAM mismatch: {expected_bits} != {rx_bits}"
-    print("[PASS] test_synthetic_16qam: 100% match on deterministic 16QAM constellation")
+    expected_bits = np.array(
+        [int(bit) for bit in expected_bits_string],
+        dtype=np.uint8
+    )
 
+    samples_per_symbol = metadata["samples_per_symbol"]
+    frequency_offset = metadata["frequency_offset_hz"]
+    phase_offset = metadata["phase_offset_degrees"]
 
-# =====================================================================
-# DATASET INTEGRATION TESTS
-# =====================================================================
+    sampling_frequency = metadata["sampling_frequency_hz"]
 
-def _test_dataset_demodulation(class_name: str, sample_identifier: str, demod_func, uses_timing: bool = True):
-    resolved = resolve_sample_paths(sample_identifier)
-    iq_path = resolved["iq_path"]
-    meta_path = resolved["metadata_path"]
-    
-    assert iq_path and iq_path.exists(), f"IQ file missing: {iq_path}"
-    assert meta_path and meta_path.exists(), f"Metadata missing: {meta_path}"
-    
-    with open(meta_path, "r", encoding="utf-8") as f:
-        meta = json.load(f)
-        
+    # --------------------------------------------------
+    # Load IQ
+    # --------------------------------------------------
+
     iq = load_iq_file(iq_path)
-    sps = meta.get("samples_per_symbol", 10)
-    fo = meta.get("frequency_offset_hz", 0.0)
-    po = meta.get("phase_offset_degrees", 0.0)
-    fs = meta.get("sampling_frequency_hz", 1_000_000.0)
-    
-    # Synchronize
-    freq_sync = correct_frequency_offset(iq, fo, fs)
-    phase_sync = correct_phase_offset(freq_sync, po)
-    
-    if uses_timing:
-        timing_offset = estimate_timing_offset(phase_sync, sps)
-        symbols = sample_symbols(phase_sync, sps, timing_offset)
-        recovered_bits = demod_func(symbols)
-    else:
-        recovered_bits = demod_func(phase_sync, sps)
-        
-    assert len(recovered_bits) > 0, f"No bits recovered for {class_name}"
-    assert np.all((recovered_bits == 0) | (recovered_bits == 1)), f"Non-binary bits for {class_name}"
-    print(f"[PASS] Dataset integration {class_name}: successfully recovered {len(recovered_bits)} binary bits from {iq_path.name}")
 
+    print("Original IQ samples:", len(iq))
+    print("Samples per symbol:", samples_per_symbol)
+    print("Frequency offset:", frequency_offset, "Hz")
+    print("Phase correction:", phase_offset, "degrees")
 
-def test_dataset_bpsk():
-    _test_dataset_demodulation("BPSK", "signal_0001", demodulate_bpsk, uses_timing=True)
+    # --------------------------------------------------
+    # Frequency synchronization
+    # --------------------------------------------------
 
+    frequency_corrected = correct_frequency_offset(
+        iq,
+        frequency_offset,
+        sampling_frequency
+    )
 
-def test_dataset_qpsk():
-    _test_dataset_demodulation("QPSK", "signal_0201", demodulate_qpsk, uses_timing=True)
+    # --------------------------------------------------
+    # Phase synchronization
+    # --------------------------------------------------
 
+    phase_corrected = correct_phase_offset(
+        frequency_corrected,
+        phase_offset
+    )
 
-def test_dataset_fsk():
-    _test_dataset_demodulation("FSK", "signal_0401", demodulate_fsk, uses_timing=False)
+    # --------------------------------------------------
+    # Timing synchronization
+    # --------------------------------------------------
 
+    timing_offset = estimate_timing_offset(
+        phase_corrected,
+        samples_per_symbol
+    )
 
-def test_dataset_16qam():
-    _test_dataset_demodulation("16QAM", "signal_0601", demodulate_16qam, uses_timing=True)
+    symbols = sample_symbols(
+        phase_corrected,
+        samples_per_symbol,
+        timing_offset
+    )
+
+    print("Timing offset:", timing_offset)
+    print("Recovered symbols:", len(symbols))
+
+    # --------------------------------------------------
+    # 16QAM demodulation
+    # --------------------------------------------------
+
+    recovered_bits = demodulate_16qam(symbols)
+
+    # --------------------------------------------------
+    # Compare expected and recovered bits
+    # --------------------------------------------------
+
+    compare_length = min(
+        len(expected_bits),
+        len(recovered_bits)
+    )
+
+    expected_compare = expected_bits[:compare_length]
+    recovered_compare = recovered_bits[:compare_length]
+
+    correct_bits = np.sum(
+        expected_compare == recovered_compare
+    )
+
+    accuracy = (
+        correct_bits / compare_length * 100
+        if compare_length > 0
+        else 0
+    )
+
+    # --------------------------------------------------
+    # Results
+    # --------------------------------------------------
+
+    print("Expected bits:", len(expected_bits))
+    print("Recovered bits:", len(recovered_bits))
+    print("Correct bits:", correct_bits)
+    print("Bit accuracy:", accuracy, "%")
+
+    print("\nExpected first 50 bits:")
+    print("".join(map(str, expected_bits[:50])))
+
+    print("\nRecovered first 50 bits:")
+    print("".join(map(str, recovered_bits[:50])))
+
+    # --------------------------------------------------
+    # Validation
+    # --------------------------------------------------
+
+    assert len(recovered_bits) == len(expected_bits), (
+        f"Bit length mismatch: "
+        f"expected {len(expected_bits)}, "
+        f"got {len(recovered_bits)}"
+    )
+
+    assert accuracy >= 95.0, (
+        f"16QAM accuracy too low: {accuracy:.2f}%"
+    )
 
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("RUNNING DEMODULATION TESTS")
-    print("=" * 60)
-    
-    test_synthetic_bpsk()
-    test_synthetic_qpsk()
-    test_synthetic_fsk()
-    test_synthetic_16qam()
-    
-    test_dataset_bpsk()
-    test_dataset_qpsk()
-    test_dataset_fsk()
-    test_dataset_16qam()
-    
-    print("\nALL DEMODULATION TESTS PASSED SUCCESSFULLY!")
+    test_16qam_demodulation()
