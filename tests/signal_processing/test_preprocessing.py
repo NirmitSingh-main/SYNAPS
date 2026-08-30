@@ -1,5 +1,13 @@
 import numpy as np
 
+import sys
+from pathlib import Path
+
+# Ensure project root is on sys.path
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from signal_processing.input.loader import load_signal
 from signal_processing.input.validation import validate_samples
 
@@ -15,7 +23,7 @@ from signal_processing.preprocessing.resampling import resample_signal
 # INPUT FILE
 # ============================================================
 
-FILE_PATH = r"data\iq\signal_0001_bpsk.iq"
+FILE_PATH = r"data\iq\BPSK\signal_0001_bpsk.iq"
 
 # Sampling rate of the raw IQ file.
 #
@@ -238,22 +246,6 @@ print("=" * 60)
 
 print()
 print("Pipeline:")
-print("IQ file")
-print("  ↓")
-print("Loader")
-print("  ↓")
-print("Validation")
-print("  ↓")
-print("Detection")
-print("  ↓")
-print("DC removal")
-print("  ↓")
-print("Filtering")
-print("  ↓")
-print("Normalization")
-print("  ↓")
-print("Resampling")
-print("  ↓")
-print("Final validation")
+print("IQ file -> Loader -> Validation -> Detection -> DC removal -> Filtering -> Normalization -> Resampling -> Final validation")
 print()
 print("SUCCESS")

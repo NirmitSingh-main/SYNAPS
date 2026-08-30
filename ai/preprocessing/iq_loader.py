@@ -26,7 +26,7 @@ def load_iq_file(filepath):
 
 
 if __name__ == "__main__":
-    filepath = "data/iq/signal_0004_bpsk.iq"
+    filepath = "data/iq/BPSK/signal_0004_bpsk.iq"
 
     iq = load_iq_file(filepath)
 

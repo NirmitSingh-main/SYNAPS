@@ -4,6 +4,12 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from project_paths import (
+    TRANSFORMER_CHECKPOINT,
+    TRANSFORMER_RESULT_DIR,
+    CLASS_NAMES,
+)
+
 from ai.preprocessing.iq_loader import load_iq_file
 from ai.preprocessing.wav_loader import load_wav_file
 from ai.features.learned_features import prepare_iq_features
@@ -19,24 +25,23 @@ from ai.classification.unknown_detection import (
 )
 
 
-MODEL_PATH = Path("ai/models/transformer.pth")
-RESULT_DIR = Path("result/transformer")
+MODEL_PATH = TRANSFORMER_CHECKPOINT
+RESULT_DIR = TRANSFORMER_RESULT_DIR
 SEQUENCE_LENGTH = 1000
 
-CLASS_NAMES = [
-    "BPSK",
-    "QPSK",
-    "FSK",
-    "QAM16",
-]
 
+def load_model(model_path=None):
 
-def load_model():
-
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(
-            f"Model not found: {MODEL_PATH}"
-        )
+    target_path = Path(model_path) if model_path else MODEL_PATH
+    if not target_path.exists():
+        # Check alternate model location
+        alt_path = Path("models/transformer/transformer.pth")
+        if alt_path.exists():
+            target_path = alt_path
+        else:
+            raise FileNotFoundError(
+                f"Model not found: {target_path}"
+            )
 
     device = torch.device(
         "cuda" if torch.cuda.is_available() else "cpu"
@@ -46,7 +51,7 @@ def load_model():
 
     model.load_state_dict(
         torch.load(
-            MODEL_PATH,
+            target_path,
             map_location=device
         )
     )

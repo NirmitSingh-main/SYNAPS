@@ -1,35 +1,39 @@
+"""
+Transformer model training pipeline for modulation classification in SYNAPS.
+"""
+
 import json
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 
+from project_paths import (
+    CLASS_NAMES,
+    CLASS_TO_INDEX,
+    IQ_ROOT,
+    METADATA_ROOT,
+    PROJECT_ROOT,
+    TRANSFORMER_CHECKPOINT,
+    TRANSFORMER_RESULT_DIR,
+    resolve_sample_paths,
+)
 from ai.preprocessing.iq_loader import load_iq_file
 from ai.features.learned_features import prepare_iq_features
 from ai.models.transformer import SignalTransformer
+from ai.training.metrics import (
+    calculate_accuracy,
+    calculate_per_class_metrics,
+)
 
 
 # ============================================================
-# CONFIGURATION
+# CONFIGURATION DEFAULTS
 # ============================================================
-
-CLASS_NAMES = [
-    "BPSK",
-    "QPSK",
-    "FSK",
-    "QAM16",
-]
-
-CLASS_TO_INDEX = {
-    "BPSK": 0,
-    "QPSK": 1,
-    "FSK": 2,
-    "QAM16": 3,
-}
 
 SEQUENCE_LENGTH = 1000
-
 BATCH_SIZE = 16
 EPOCHS = 30
 LEARNING_RATE = 1e-4
@@ -40,308 +44,138 @@ TEST_RATIO = 0.15
 
 RANDOM_SEED = 42
 
-MODEL_PATH = Path("ai/models/transformer.pth")
-
-# IMPORTANT:
-# Your project currently uses "result", not "results".
-RESULT_FOLDER = Path("result/transformer")
+MODEL_PATH = TRANSFORMER_CHECKPOINT
+RESULT_FOLDER = TRANSFORMER_RESULT_DIR
 
 
 # ============================================================
 # REPRODUCIBILITY
 # ============================================================
 
-np.random.seed(RANDOM_SEED)
-torch.manual_seed(RANDOM_SEED)
+def set_seed(seed: int = RANDOM_SEED):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+set_seed(RANDOM_SEED)
 
 
 # ============================================================
-# RESULT FILE
+# RESULT FILE MANAGEMENT
 # ============================================================
 
-def get_next_result_file():
+def get_next_result_files() -> Tuple[Path, Path]:
     """
-    Automatically create:
-        run_001.txt
-        run_002.txt
-        run_003.txt
-        ...
-
-    inside:
-        result/transformer/
+    Returns (txt_path, json_path) with auto-incremented run number:
+        result/transformer/run_001.txt
+        result/transformer/run_001.json
     """
-
-    RESULT_FOLDER.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    existing_files = list(
-        RESULT_FOLDER.glob("run_*.txt")
-    )
-
+    RESULT_FOLDER.mkdir(parents=True, exist_ok=True)
+    existing_files = list(RESULT_FOLDER.glob("run_*.txt"))
     numbers = []
 
     for file in existing_files:
-
         try:
-            number = int(
-                file.stem.split("_")[1]
-            )
-
+            number = int(file.stem.split("_")[1])
             numbers.append(number)
-
         except (IndexError, ValueError):
             pass
 
-    if numbers:
-        next_number = max(numbers) + 1
-    else:
-        next_number = 1
-
-    return (
-        RESULT_FOLDER
-        / f"run_{next_number:03d}.txt"
-    )
+    next_number = max(numbers) + 1 if numbers else 1
+    txt_file = RESULT_FOLDER / f"run_{next_number:03d}.txt"
+    json_file = RESULT_FOLDER / f"run_{next_number:03d}.json"
+    return txt_file, json_file
 
 
 # ============================================================
-# FIND DATASET
+# DATASET DISCOVERY
 # ============================================================
 
-def find_dataset():
-
+def find_dataset() -> List[Dict]:
+    """
+    Discover all dataset samples using canonical path resolution.
+    """
     dataset = []
 
-    for class_index, class_key in enumerate(
-        CLASS_NAMES
-    ):
+    for class_index, class_key in enumerate(CLASS_NAMES):
+        metadata_folder = METADATA_ROOT / class_key
+        iq_folder = IQ_ROOT / class_key
 
-        metadata_folder = (
-            Path("data/metadata")
-            / class_key
-        )
-
-        iq_folder = (
-            Path("data/iq")
-            / class_key
-        )
-
-        metadata_files = sorted(
-            metadata_folder.glob("*.json")
-        )
-
-        print(
-            f"{class_key}: "
-            f"{len(metadata_files)} metadata files"
-        )
-
-        if not metadata_files:
-
-            raise FileNotFoundError(
-                f"No metadata files found in:\n"
-                f"{metadata_folder}"
-            )
-
+        if not metadata_folder.exists():
+            raise FileNotFoundError(f"Metadata folder not found: {metadata_folder}")
         if not iq_folder.exists():
+            raise FileNotFoundError(f"IQ folder not found: {iq_folder}")
 
-            raise FileNotFoundError(
-                f"IQ folder not found:\n"
-                f"{iq_folder}"
-            )
+        metadata_files = sorted(metadata_folder.glob("*.json"))
+        print(f"{class_key}: {len(metadata_files)} metadata files found")
 
         for metadata_path in metadata_files:
+            resolved = resolve_sample_paths(metadata_path)
+            iq_path = resolved["iq_path"]
 
-            with open(
-                metadata_path,
-                "r"
-            ) as f:
-
-                metadata = json.load(f)
-
-            filename = metadata["filename"]
-
-            if not filename.endswith(".iq"):
-                filename += ".iq"
-
-            # ------------------------------------------------
-            # Exact filename
-            # ------------------------------------------------
-
-            iq_path = (
-                iq_folder / filename
-            )
-
-            # ------------------------------------------------
-            # FSK compatibility
-            # ------------------------------------------------
-
-            if (
-                not iq_path.exists()
-                and class_key == "FSK"
-            ):
-
-                alternative_name = filename.replace(
-                    "_2fsk.iq",
-                    "_fsk.iq"
-                )
-
-                iq_path = (
-                    iq_folder
-                    / alternative_name
-                )
-
-            # ------------------------------------------------
-            # QAM16 compatibility
-            # ------------------------------------------------
-
-            if (
-                not iq_path.exists()
-                and class_key == "QAM16"
-            ):
-
-                alternative_name = filename.replace(
-                    "_16qam.iq",
-                    "_qam16.iq"
-                )
-
-                iq_path = (
-                    iq_folder
-                    / alternative_name
-                )
-
-            # ------------------------------------------------
-            # Final validation
-            # ------------------------------------------------
-
-            if not iq_path.exists():
-
+            if not iq_path or not iq_path.exists():
                 raise FileNotFoundError(
-                    f"\nIQ file not found.\n"
-                    f"Metadata: {metadata_path}\n"
-                    f"Expected: {filename}\n"
-                    f"Folder: {iq_folder}"
+                    f"IQ file corresponding to {metadata_path.name} not found in {iq_folder}"
                 )
 
-            dataset.append(
-                {
-                    "iq_path": iq_path,
-                    "metadata_path": metadata_path,
-                    "label": class_index,
-                    "class_name": class_key,
-                }
-            )
+            dataset.append({
+                "iq_path": iq_path,
+                "metadata_path": metadata_path,
+                "label": class_index,
+                "class_name": class_key,
+                "sample_id": resolved["sample_id"],
+            })
 
-    print(
-        f"\nTotal dataset samples: "
-        f"{len(dataset)}"
-    )
-
+    print(f"\nTotal dataset samples discovered: {len(dataset)}")
     return dataset
 
 
 # ============================================================
-# LOAD ONE SIGNAL
+# FEATURE EXTRACTION & DATASET BUILDING
 # ============================================================
 
-def load_signal(item):
+def load_signal_features(item: Dict, sequence_length: int = SEQUENCE_LENGTH) -> np.ndarray:
+    iq = load_iq_file(item["iq_path"])
+    features = prepare_iq_features(iq)
 
-    iq = load_iq_file(
-        item["iq_path"]
-    )
-
-    features = prepare_iq_features(
-        iq
-    )
-
-    # --------------------------------------------------------
-    # Crop
-    # --------------------------------------------------------
-
-    if len(features) >= SEQUENCE_LENGTH:
-
-        features = features[
-            :SEQUENCE_LENGTH
-        ]
-
-    # --------------------------------------------------------
-    # Pad
-    # --------------------------------------------------------
-
+    if len(features) >= sequence_length:
+        features = features[:sequence_length]
     else:
-
-        padded = np.zeros(
-            (
-                SEQUENCE_LENGTH,
-                4
-            ),
-            dtype=np.float32
-        )
-
-        padded[
-            :len(features)
-        ] = features
-
+        padded = np.zeros((sequence_length, 4), dtype=np.float32)
+        padded[:len(features)] = features
         features = padded
 
-    return features.astype(
-        np.float32
-    )
+    return features.astype(np.float32)
 
 
-# ============================================================
-# BUILD DATASET
-# ============================================================
-
-def build_dataset(dataset):
+def build_dataset(
+    dataset: List[Dict],
+    sequence_length: int = SEQUENCE_LENGTH,
+    max_samples: Optional[int] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Build (X, y) arrays from dataset list.
+    """
+    if max_samples and max_samples < len(dataset):
+        dataset = dataset[:max_samples]
 
     X = []
     y = []
 
-    print("\nLoading IQ signals...")
-
-    for index, item in enumerate(
-        dataset
-    ):
-
-        features = load_signal(
-            item
-        )
-
+    print(f"\nExtracting features for {len(dataset)} signals...")
+    for idx, item in enumerate(dataset):
+        features = load_signal_features(item, sequence_length=sequence_length)
         X.append(features)
         y.append(item["label"])
 
-        if (
-            index + 1
-        ) % 100 == 0:
+        if (idx + 1) % 100 == 0 or (idx + 1) == len(dataset):
+            print(f"Loaded {idx + 1}/{len(dataset)}")
 
-            print(
-                f"Loaded "
-                f"{index + 1}/"
-                f"{len(dataset)}"
-            )
-
-    X = np.asarray(
-        X,
-        dtype=np.float32
-    )
-
-    y = np.asarray(
-        y,
-        dtype=np.int64
-    )
-
-    print("\nDataset loaded.")
-    print(
-        "X shape:",
-        X.shape
-    )
-
-    print(
-        "y shape:",
-        y.shape
-    )
-
+    X = np.asarray(X, dtype=np.float32)
+    y = np.asarray(y, dtype=np.int64)
+    print(f"Features loaded. X shape: {X.shape}, y shape: {y.shape}")
     return X, y
 
 
@@ -349,1063 +183,295 @@ def build_dataset(dataset):
 # STRATIFIED SPLIT
 # ============================================================
 
-def stratified_split(X, y):
-
-    rng = np.random.default_rng(
-        RANDOM_SEED
-    )
-
+def stratified_split(
+    X: np.ndarray,
+    y: np.ndarray,
+    train_ratio: float = TRAIN_RATIO,
+    val_ratio: float = VALIDATION_RATIO,
+    seed: int = RANDOM_SEED,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(seed)
     train_indices = []
-    validation_indices = []
+    val_indices = []
     test_indices = []
 
-    for class_index in range(
-        len(CLASS_NAMES)
-    ):
+    for class_idx in range(len(CLASS_NAMES)):
+        class_indices = np.where(y == class_idx)[0]
+        rng.shuffle(class_indices)
+        n = len(class_indices)
 
-        class_indices = np.where(
-            y == class_index
-        )[0]
+        train_end = int(n * train_ratio)
+        val_end = train_end + int(n * val_ratio)
 
-        rng.shuffle(
-            class_indices
-        )
+        train_indices.extend(class_indices[:train_end])
+        val_indices.extend(class_indices[train_end:val_end])
+        test_indices.extend(class_indices[val_end:])
 
-        n = len(
-            class_indices
-        )
-
-        train_end = int(
-            n * TRAIN_RATIO
-        )
-
-        validation_end = (
-            train_end
-            + int(
-                n * VALIDATION_RATIO
-            )
-        )
-
-        train_indices.extend(
-            class_indices[
-                :train_end
-            ]
-        )
-
-        validation_indices.extend(
-            class_indices[
-                train_end:
-                validation_end
-            ]
-        )
-
-        test_indices.extend(
-            class_indices[
-                validation_end:
-            ]
-        )
-
-    rng.shuffle(
-        train_indices
-    )
-
-    rng.shuffle(
-        validation_indices
-    )
-
-    rng.shuffle(
-        test_indices
-    )
-
-    X_train = X[
-        train_indices
-    ]
-
-    y_train = y[
-        train_indices
-    ]
-
-    X_validation = X[
-        validation_indices
-    ]
-
-    y_validation = y[
-        validation_indices
-    ]
-
-    X_test = X[
-        test_indices
-    ]
-
-    y_test = y[
-        test_indices
-    ]
+    rng.shuffle(train_indices)
+    rng.shuffle(val_indices)
+    rng.shuffle(test_indices)
 
     return (
-        X_train,
-        y_train,
-        X_validation,
-        y_validation,
-        X_test,
-        y_test,
+        X[train_indices], y[train_indices],
+        X[val_indices], y[val_indices],
+        X[test_indices], y[test_indices],
     )
 
 
 # ============================================================
-# EVALUATE
+# EVALUATION
 # ============================================================
 
 def evaluate_model(
-    model,
-    loader,
-    criterion,
-    device
-):
-
+    model: torch.nn.Module,
+    loader: DataLoader,
+    criterion: torch.nn.Module,
+    device: torch.device,
+) -> Tuple[float, float, np.ndarray, np.ndarray]:
     model.eval()
-
     total_loss = 0.0
-    total_correct = 0
     total_samples = 0
+    all_preds = []
+    all_targets = []
 
     with torch.no_grad():
-
         for features, labels in loader:
+            features = features.to(device)
+            labels = labels.to(device)
 
-            features = features.to(
-                device
-            )
+            outputs = model(features)
+            loss = criterion(outputs, labels)
 
-            labels = labels.to(
-                device
-            )
+            total_loss += loss.item() * labels.size(0)
+            total_samples += labels.size(0)
 
-            outputs = model(
-                features
-            )
+            preds = torch.argmax(outputs, dim=1)
+            all_preds.extend(preds.cpu().numpy())
+            all_targets.extend(labels.cpu().numpy())
 
-            loss = criterion(
-                outputs,
-                labels
-            )
+    avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+    all_preds = np.array(all_preds)
+    all_targets = np.array(all_targets)
+    accuracy = calculate_accuracy(all_preds, all_targets)
 
-            total_loss += (
-                loss.item()
-                * labels.size(0)
-            )
-
-            predictions = torch.argmax(
-                outputs,
-                dim=1
-            )
-
-            total_correct += (
-                predictions == labels
-            ).sum().item()
-
-            total_samples += (
-                labels.size(0)
-            )
-
-    average_loss = (
-        total_loss
-        / total_samples
-    )
-
-    accuracy = (
-        total_correct
-        / total_samples
-    )
-
-    return (
-        average_loss,
-        accuracy
-    )
+    return avg_loss, accuracy, all_preds, all_targets
 
 
 # ============================================================
-# PER-CLASS ACCURACY
-# ============================================================
-
-def calculate_per_class_accuracy(
-    model,
-    loader,
-    device
-):
-
-    model.eval()
-
-    correct_per_class = np.zeros(
-        len(CLASS_NAMES),
-        dtype=int
-    )
-
-    total_per_class = np.zeros(
-        len(CLASS_NAMES),
-        dtype=int
-    )
-
-    with torch.no_grad():
-
-        for features, labels in loader:
-
-            features = features.to(
-                device
-            )
-
-            labels = labels.to(
-                device
-            )
-
-            outputs = model(
-                features
-            )
-
-            predictions = torch.argmax(
-                outputs,
-                dim=1
-            )
-
-            for class_index in range(
-                len(CLASS_NAMES)
-            ):
-
-                mask = (
-                    labels
-                    == class_index
-                )
-
-                total_per_class[
-                    class_index
-                ] += mask.sum().item()
-
-                correct_per_class[
-                    class_index
-                ] += (
-                    (
-                        predictions[mask]
-                        == labels[mask]
-                    )
-                    .sum()
-                    .item()
-                )
-
-    results = {}
-
-    for class_index, class_name in enumerate(
-        CLASS_NAMES
-    ):
-
-        total = total_per_class[
-            class_index
-        ]
-
-        correct = correct_per_class[
-            class_index
-        ]
-
-        if total > 0:
-
-            accuracy = (
-                correct
-                / total
-                * 100
-            )
-
-        else:
-
-            accuracy = 0.0
-
-        results[class_name] = {
-            "accuracy": accuracy,
-            "correct": correct,
-            "total": total,
-        }
-
-    return results
-
-
-# ============================================================
-# TRAIN
+# TRAINING LOOP
 # ============================================================
 
 def train_model(
-    model,
-    train_loader,
-    validation_loader,
-    device
-):
+    model: torch.nn.Module,
+    train_loader: DataLoader,
+    validation_loader: DataLoader,
+    device: torch.device,
+    epochs: int = EPOCHS,
+    learning_rate: float = LEARNING_RATE,
+    save_path: Path = MODEL_PATH,
+) -> Tuple[List[Dict], float, int]:
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    criterion = (
-        torch.nn.CrossEntropyLoss()
-    )
-
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=LEARNING_RATE
-    )
-
-    print("\n==============================")
-    print("TRANSFORMER TRAINING")
-    print("==============================")
-
-    print(
-        "Device:",
-        device
-    )
-
-    print(
-        "Epochs:",
-        EPOCHS
-    )
-
-    print(
-        "Batch size:",
-        BATCH_SIZE
-    )
-
-    print(
-        "Learning rate:",
-        LEARNING_RATE
-    )
-
-    best_validation_accuracy = 0.0
-
+    best_val_acc = 0.0
+    best_epoch = 0
     history = []
 
-    for epoch in range(
-        EPOCHS
-    ):
+    print(f"\nStarting training on {device} for {epochs} epochs (lr={learning_rate})...")
 
+    for epoch in range(epochs):
         model.train()
-
         total_loss = 0.0
         total_correct = 0
         total_samples = 0
 
         for features, labels in train_loader:
-
-            features = features.to(
-                device
-            )
-
-            labels = labels.to(
-                device
-            )
+            features = features.to(device)
+            labels = labels.to(device)
 
             optimizer.zero_grad()
-
-            outputs = model(
-                features
-            )
-
-            loss = criterion(
-                outputs,
-                labels
-            )
-
+            outputs = model(features)
+            loss = criterion(outputs, labels)
             loss.backward()
-
             optimizer.step()
 
-            total_loss += (
-                loss.item()
-                * labels.size(0)
-            )
+            total_loss += loss.item() * labels.size(0)
+            preds = torch.argmax(outputs, dim=1)
+            total_correct += (preds == labels).sum().item()
+            total_samples += labels.size(0)
 
-            predictions = torch.argmax(
-                outputs,
-                dim=1
-            )
+        train_loss = total_loss / total_samples if total_samples > 0 else 0.0
+        train_acc = total_correct / total_samples if total_samples > 0 else 0.0
 
-            total_correct += (
-                predictions == labels
-            ).sum().item()
-
-            total_samples += (
-                labels.size(0)
-            )
-
-        train_loss = (
-            total_loss
-            / total_samples
+        val_loss, val_acc, _, _ = evaluate_model(
+            model, validation_loader, criterion, device
         )
 
-        train_accuracy = (
-            total_correct
-            / total_samples
-        )
+        current_lr = optimizer.param_groups[0]["lr"]
 
-        (
-            validation_loss,
-            validation_accuracy
-        ) = evaluate_model(
-            model,
-            validation_loader,
-            criterion,
-            device
-        )
-
-        epoch_result = {
+        epoch_record = {
             "epoch": epoch + 1,
-            "train_loss": train_loss,
-            "train_accuracy": (
-                train_accuracy * 100
-            ),
-            "validation_loss": (
-                validation_loss
-            ),
-            "validation_accuracy": (
-                validation_accuracy * 100
-            ),
+            "train_loss": float(train_loss),
+            "train_accuracy": float(train_acc * 100.0),
+            "validation_loss": float(val_loss),
+            "validation_accuracy": float(val_acc * 100.0),
+            "learning_rate": float(current_lr),
         }
-
-        history.append(
-            epoch_result
-        )
+        history.append(epoch_record)
 
         print(
-            f"Epoch "
-            f"{epoch + 1}/{EPOCHS} | "
-            f"Loss: "
-            f"{train_loss:.4f} | "
-            f"Train Accuracy: "
-            f"{train_accuracy * 100:.2f}% | "
-            f"Validation Accuracy: "
-            f"{validation_accuracy * 100:.2f}%"
+            f"Epoch {epoch + 1:02d}/{epochs} | "
+            f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc * 100.0:6.2f}% | "
+            f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc * 100.0:6.2f}% | LR: {current_lr:.1e}"
         )
 
-        # ----------------------------------------------------
-        # Save best model
-        # ----------------------------------------------------
+        if val_acc >= best_val_acc:
+            best_val_acc = val_acc
+            best_epoch = epoch + 1
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(model.state_dict(), save_path)
 
-        if (
-            validation_accuracy
-            > best_validation_accuracy
-        ):
-
-            best_validation_accuracy = (
-                validation_accuracy
-            )
-
-            MODEL_PATH.parent.mkdir(
-                parents=True,
-                exist_ok=True
-            )
-
-            torch.save(
-                model.state_dict(),
-                MODEL_PATH
-            )
-
-    print(
-        "\nBest validation accuracy:",
-        f"{best_validation_accuracy * 100:.2f}%"
-    )
-
-    print(
-        "\nBest model saved to:"
-    )
-
-    print(
-        MODEL_PATH
-    )
-
-    return (
-        history,
-        best_validation_accuracy
-    )
+    return history, best_val_acc, best_epoch
 
 
 # ============================================================
-# SAVE RESULTS
+# SAVE COMPLETE RESULTS
 # ============================================================
 
-def save_results(
-    result_file,
-    dataset,
-    X_train,
-    X_validation,
-    X_test,
-    history,
-    best_validation_accuracy,
-    test_loss,
-    test_accuracy,
-    per_class_results,
-    device
+def save_training_results(
+    txt_file: Path,
+    json_file: Path,
+    config_dict: Dict,
+    history: List[Dict],
+    best_val_accuracy: float,
+    best_epoch: int,
+    test_loss: float,
+    test_accuracy: float,
+    per_class_results: Dict,
+    model_path: Path,
 ):
+    structured_result = {
+        "model_architecture": "SignalTransformer",
+        "model_path": str(model_path),
+        "configuration": config_dict,
+        "class_mapping": CLASS_TO_INDEX,
+        "best_epoch": best_epoch,
+        "best_validation_accuracy": float(best_val_accuracy * 100.0),
+        "final_test_loss": float(test_loss),
+        "final_test_accuracy": float(test_accuracy * 100.0),
+        "per_class_metrics": per_class_results,
+        "training_history": history,
+    }
 
-    with open(
-        result_file,
-        "w",
-        encoding="utf-8"
-    ) as f:
+    with open(json_file, "w", encoding="utf-8") as f:
+        json.dump(structured_result, f, indent=2)
 
-        f.write(
-            "SYNAPS TRANSFORMER TRAINING RESULT\n"
-        )
-
-        f.write(
-            "====================================\n\n"
-        )
-
-        # ----------------------------------------------------
-        # Dataset
-        # ----------------------------------------------------
-
-        f.write(
-            "DATASET\n"
-        )
-
-        f.write(
-            "-------\n"
-        )
-
-        f.write(
-            f"Total samples: {len(dataset)}\n"
-        )
-
-        for class_name in CLASS_NAMES:
-
-            count = sum(
-                item["class_name"]
-                == class_name
-                for item in dataset
-            )
-
+    with open(txt_file, "w", encoding="utf-8") as f:
+        f.write("SYNAPS TRANSFORMER TRAINING RESULT\n")
+        f.write("====================================\n\n")
+        f.write(f"Model checkpoint: {model_path}\n")
+        f.write(f"Total epochs: {config_dict.get('epochs')}\n")
+        f.write(f"Batch size: {config_dict.get('batch_size')}\n")
+        f.write(f"Learning rate: {config_dict.get('learning_rate')}\n\n")
+        f.write("TRAINING HISTORY:\n")
+        for rec in history:
             f.write(
-                f"{class_name}: "
-                f"{count}\n"
+                f"Epoch {rec['epoch']:02d} | "
+                f"Train Loss: {rec['train_loss']:.4f} | Train Acc: {rec['train_accuracy']:.2f}% | "
+                f"Val Loss: {rec['validation_loss']:.4f} | Val Acc: {rec['validation_accuracy']:.2f}%\n"
             )
-
-        f.write("\n")
-
-        # ----------------------------------------------------
-        # Configuration
-        # ----------------------------------------------------
-
-        f.write(
-            "CONFIGURATION\n"
-        )
-
-        f.write(
-            "-------------\n"
-        )
-
-        f.write(
-            f"Sequence length: "
-            f"{SEQUENCE_LENGTH}\n"
-        )
-
-        f.write(
-            "Features: "
-            "I, Q, magnitude, phase\n"
-        )
-
-        f.write(
-            f"Batch size: "
-            f"{BATCH_SIZE}\n"
-        )
-
-        f.write(
-            f"Epochs: "
-            f"{EPOCHS}\n"
-        )
-
-        f.write(
-            f"Learning rate: "
-            f"{LEARNING_RATE}\n"
-        )
-
-        f.write(
-            f"Random seed: "
-            f"{RANDOM_SEED}\n"
-        )
-
-        f.write(
-            f"Device: "
-            f"{device}\n"
-        )
-
-        f.write("\n")
-
-        # ----------------------------------------------------
-        # Split
-        # ----------------------------------------------------
-
-        f.write(
-            "DATASET SPLIT\n"
-        )
-
-        f.write(
-            "-------------\n"
-        )
-
-        f.write(
-            f"Training samples: "
-            f"{len(X_train)}\n"
-        )
-
-        f.write(
-            f"Validation samples: "
-            f"{len(X_validation)}\n"
-        )
-
-        f.write(
-            f"Test samples: "
-            f"{len(X_test)}\n"
-        )
-
-        f.write(
-            f"Training shape: "
-            f"{X_train.shape}\n"
-        )
-
-        f.write(
-            f"Validation shape: "
-            f"{X_validation.shape}\n"
-        )
-
-        f.write(
-            f"Test shape: "
-            f"{X_test.shape}\n"
-        )
-
-        f.write("\n")
-
-        # ----------------------------------------------------
-        # Epoch history
-        # ----------------------------------------------------
-
-        f.write(
-            "TRAINING HISTORY\n"
-        )
-
-        f.write(
-            "----------------\n"
-        )
-
-        for item in history:
-
-            f.write(
-                f"Epoch {item['epoch']}/{EPOCHS} | "
-                f"Loss: "
-                f"{item['train_loss']:.4f} | "
-                f"Train Accuracy: "
-                f"{item['train_accuracy']:.2f}% | "
-                f"Validation Loss: "
-                f"{item['validation_loss']:.4f} | "
-                f"Validation Accuracy: "
-                f"{item['validation_accuracy']:.2f}%\n"
-            )
-
-        f.write("\n")
-
-        # ----------------------------------------------------
-        # Best validation
-        # ----------------------------------------------------
-
-        f.write(
-            "BEST VALIDATION RESULT\n"
-        )
-
-        f.write(
-            "----------------------\n"
-        )
-
-        f.write(
-            f"Best Validation Accuracy: "
-            f"{best_validation_accuracy * 100:.2f}%\n"
-        )
-
-        f.write("\n")
-
-        # ----------------------------------------------------
-        # Test
-        # ----------------------------------------------------
-
-        f.write(
-            "FINAL TEST\n"
-        )
-
-        f.write(
-            "----------\n"
-        )
-
-        f.write(
-            f"Test Loss: "
-            f"{test_loss:.4f}\n"
-        )
-
-        f.write(
-            f"Test Accuracy: "
-            f"{test_accuracy * 100:.2f}%\n"
-        )
-
-        f.write("\n")
-
-        # ----------------------------------------------------
-        # Per-class
-        # ----------------------------------------------------
-
-        f.write(
-            "PER-CLASS ACCURACY\n"
-        )
-
-        f.write(
-            "------------------\n"
-        )
-
-        for class_name in CLASS_NAMES:
-
-            result = per_class_results[
-                class_name
-            ]
-
-            f.write(
-                f"{class_name}: "
-                f"{result['accuracy']:.2f}% "
-                f"("
-                f"{result['correct']}/"
-                f"{result['total']}"
-                f")\n"
-            )
-
-        f.write("\n")
-
-        # ----------------------------------------------------
-        # Model
-        # ----------------------------------------------------
-
-        f.write(
-            "MODEL\n"
-        )
-
-        f.write(
-            "-----\n"
-        )
-
-        f.write(
-            f"Best model: "
-            f"{MODEL_PATH}\n"
-        )
+        f.write(f"\nBest Epoch: {best_epoch} (Val Acc: {best_val_accuracy * 100.0:.2f}%)\n")
+        f.write(f"Final Test Loss: {test_loss:.4f}\n")
+        f.write(f"Final Test Accuracy: {test_accuracy * 100.0:.2f}%\n\n")
+        f.write("PER-CLASS ACCURACY:\n")
+        for cname, met in per_class_results.items():
+            f.write(f"{cname}: {met['accuracy']:.2f}% ({met['correct']}/{met['total']})\n")
 
 
 # ============================================================
-# MAIN
+# MAIN ENTRY POINT
 # ============================================================
 
-def main():
-
-    print(
-        "=============================="
-    )
-
-    print(
-        "SYNAPS AI DATASET"
-    )
-
-    print(
-        "=============================="
-    )
-
-    # --------------------------------------------------------
-    # Find dataset
-    # --------------------------------------------------------
+def run_training_pipeline(
+    epochs: int = EPOCHS,
+    batch_size: int = BATCH_SIZE,
+    learning_rate: float = LEARNING_RATE,
+    max_samples: Optional[int] = None,
+    save_checkpoint: bool = True,
+    smoke_test: bool = False,
+) -> Dict:
+    set_seed(RANDOM_SEED)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     dataset = find_dataset()
-
-    # --------------------------------------------------------
-    # Load signals
-    # --------------------------------------------------------
-
-    X, y = build_dataset(
-        dataset
-    )
-
-    # --------------------------------------------------------
-    # Split
-    # --------------------------------------------------------
-
-    (
-        X_train,
-        y_train,
-        X_validation,
-        y_validation,
-        X_test,
-        y_test,
-    ) = stratified_split(
-        X,
-        y
-    )
-
-    print(
-        "\n=============================="
-    )
-
-    print(
-        "DATASET SPLIT"
-    )
-
-    print(
-        "=============================="
-    )
-
-    print(
-        "Training samples:",
-        len(X_train)
-    )
-
-    print(
-        "Validation samples:",
-        len(X_validation)
-    )
-
-    print(
-        "Test samples:",
-        len(X_test)
-    )
-
-    print(
-        "Training shape:",
-        X_train.shape
-    )
-
-    print(
-        "Validation shape:",
-        X_validation.shape
-    )
-
-    print(
-        "Test shape:",
-        X_test.shape
-    )
-
-    # --------------------------------------------------------
-    # Tensor datasets
-    # --------------------------------------------------------
-
-    train_dataset = TensorDataset(
-        torch.tensor(
-            X_train,
-            dtype=torch.float32
-        ),
-        torch.tensor(
-            y_train,
-            dtype=torch.long
-        )
-    )
-
-    validation_dataset = TensorDataset(
-        torch.tensor(
-            X_validation,
-            dtype=torch.float32
-        ),
-        torch.tensor(
-            y_validation,
-            dtype=torch.long
-        )
-    )
-
-    test_dataset = TensorDataset(
-        torch.tensor(
-            X_test,
-            dtype=torch.float32
-        ),
-        torch.tensor(
-            y_test,
-            dtype=torch.long
-        )
-    )
-
-    # --------------------------------------------------------
-    # DataLoaders
-    # --------------------------------------------------------
+    X, y = build_dataset(dataset, sequence_length=SEQUENCE_LENGTH, max_samples=max_samples)
+    X_train, y_train, X_val, y_val, X_test, y_test = stratified_split(X, y)
 
     train_loader = DataLoader(
-        train_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=True
+        TensorDataset(torch.tensor(X_train, dtype=torch.float32), torch.tensor(y_train, dtype=torch.long)),
+        batch_size=batch_size,
+        shuffle=True,
     )
-
-    validation_loader = DataLoader(
-        validation_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=False
+    val_loader = DataLoader(
+        TensorDataset(torch.tensor(X_val, dtype=torch.float32), torch.tensor(y_val, dtype=torch.long)),
+        batch_size=batch_size,
+        shuffle=False,
     )
-
     test_loader = DataLoader(
-        test_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=False
+        TensorDataset(torch.tensor(X_test, dtype=torch.float32), torch.tensor(y_test, dtype=torch.long)),
+        batch_size=batch_size,
+        shuffle=False,
     )
 
-    # --------------------------------------------------------
-    # Device
-    # --------------------------------------------------------
+    model = SignalTransformer(input_features=4, num_classes=len(CLASS_NAMES)).to(device)
 
-    device = torch.device(
-        "cuda"
-        if torch.cuda.is_available()
-        else "cpu"
+    actual_epochs = 2 if smoke_test else epochs
+    history, best_val_acc, best_epoch = train_model(
+        model=model,
+        train_loader=train_loader,
+        validation_loader=val_loader,
+        device=device,
+        epochs=actual_epochs,
+        learning_rate=learning_rate,
+        save_path=MODEL_PATH if save_checkpoint else RESULT_FOLDER / "temp_model.pth",
     )
 
-    # --------------------------------------------------------
-    # Model
-    # --------------------------------------------------------
+    # Evaluate best model
+    criterion = torch.nn.CrossEntropyLoss()
+    test_loss, test_acc, preds, targets = evaluate_model(model, test_loader, criterion, device)
+    per_class_results = calculate_per_class_metrics(preds, targets, CLASS_NAMES)
 
-    model = SignalTransformer()
+    txt_file, json_file = get_next_result_files()
+    config_dict = {
+        "epochs": actual_epochs,
+        "batch_size": batch_size,
+        "learning_rate": learning_rate,
+        "sequence_length": SEQUENCE_LENGTH,
+        "smoke_test": smoke_test,
+    }
 
-    model = model.to(
-        device
-    )
-
-    # --------------------------------------------------------
-    # Train
-    # --------------------------------------------------------
-
-    (
-        history,
-        best_validation_accuracy
-    ) = train_model(
-        model,
-        train_loader,
-        validation_loader,
-        device
-    )
-
-    # --------------------------------------------------------
-    # Load best model
-    # --------------------------------------------------------
-
-    if MODEL_PATH.exists():
-
-        model.load_state_dict(
-            torch.load(
-                MODEL_PATH,
-                map_location=device
-            )
-        )
-
-    # --------------------------------------------------------
-    # Final test
-    # --------------------------------------------------------
-
-    criterion = (
-        torch.nn.CrossEntropyLoss()
-    )
-
-    (
-        test_loss,
-        test_accuracy
-    ) = evaluate_model(
-        model,
-        test_loader,
-        criterion,
-        device
-    )
-
-    print(
-        "\n=============================="
-    )
-
-    print(
-        "FINAL TEST"
-    )
-
-    print(
-        "=============================="
-    )
-
-    print(
-        "Test Loss:",
-        f"{test_loss:.4f}"
-    )
-
-    print(
-        "Test Accuracy:",
-        f"{test_accuracy * 100:.2f}%"
-    )
-
-    # --------------------------------------------------------
-    # Per-class accuracy
-    # --------------------------------------------------------
-
-    per_class_results = (
-        calculate_per_class_accuracy(
-            model,
-            test_loader,
-            device
-        )
-    )
-
-    print(
-        "\nPer-class accuracy:"
-    )
-
-    for class_name in CLASS_NAMES:
-
-        result = (
-            per_class_results[
-                class_name
-            ]
-        )
-
-        print(
-            f"{class_name}: "
-            f"{result['accuracy']:.2f}% "
-            f"("
-            f"{result['correct']}/"
-            f"{result['total']}"
-            f")"
-        )
-
-    # --------------------------------------------------------
-    # Save result
-    # --------------------------------------------------------
-
-    result_file = (
-        get_next_result_file()
-    )
-
-    save_results(
-        result_file=result_file,
-        dataset=dataset,
-        X_train=X_train,
-        X_validation=X_validation,
-        X_test=X_test,
+    save_training_results(
+        txt_file=txt_file,
+        json_file=json_file,
+        config_dict=config_dict,
         history=history,
-        best_validation_accuracy=(
-            best_validation_accuracy
-        ),
+        best_val_accuracy=best_val_acc,
+        best_epoch=best_epoch,
         test_loss=test_loss,
-        test_accuracy=test_accuracy,
-        per_class_results=(
-            per_class_results
-        ),
-        device=device
+        test_accuracy=test_acc,
+        per_class_results=per_class_results,
+        model_path=MODEL_PATH,
     )
 
-    print(
-        "\n=============================="
-    )
+    print(f"\n[SUCCESS] Training results saved to:\n  {txt_file}\n  {json_file}")
+    return {
+        "best_val_accuracy": best_val_acc,
+        "test_accuracy": test_acc,
+        "history": history,
+        "result_txt": str(txt_file),
+        "result_json": str(json_file),
+    }
 
-    print(
-        "RESULT SAVED"
-    )
-
-    print(
-        "=============================="
-    )
-
-    print(
-        result_file
-    )
-
-
-# ============================================================
-# ENTRY POINT
-# ============================================================
 
 if __name__ == "__main__":
-    main()
+    run_training_pipeline()

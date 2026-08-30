@@ -8,7 +8,7 @@
   "phase_offset_degrees": 180.0,
   "amplitude_scale": 1.5,
   "signal_to_noise_ratio_db": 25,
-  "samples": 20000,
+  "samples": 8192,
   "samples_per_symbol": 10,
   "iq_file_convention": "interleaved little-endian float32 I,Q",
   "wav_file_convention": "two-channel float32 WAV: channel 1=I, channel 2=Q",

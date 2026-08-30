@@ -28,7 +28,7 @@ def correct_frequency_offset(iq, frequency_offset_hz, sampling_frequency_hz):
 if __name__ == "__main__":
 
     # Load IQ data
-    filepath = "data/iq/signal_0004_bpsk.iq"
+    filepath = "data/iq/BPSK/signal_0004_bpsk.iq"
 
     data = np.fromfile(filepath, dtype="<f4")
 

@@ -17,8 +17,8 @@ def demodulate_fsk(signal, samples_per_symbol):
     # Calculate phase
     phase = np.unwrap(np.angle(signal))
 
-    # Calculate instantaneous frequency
-    frequency = np.diff(phase)
+    # Calculate instantaneous frequency (padded to maintain full length)
+    frequency = np.pad(np.diff(phase), (0, 1), mode="edge")
 
     # One frequency estimate per symbol
     symbol_frequencies = []

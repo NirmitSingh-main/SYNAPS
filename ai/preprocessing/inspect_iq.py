@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from iq_loader import load_iq_file
 
 
-filepath = "data/iq/signal_0004_bpsk.iq"
+filepath = "data/iq/BPSK/signal_0004_bpsk.iq"
 
 iq = load_iq_file(filepath)
 

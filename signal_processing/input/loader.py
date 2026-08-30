@@ -68,9 +68,19 @@ def load_signal(
 
     if signal_format == "IQ":
         if iq_sample_rate is None:
-            raise ValueError(
-                "Sampling rate must be provided for raw .iq files."
-            )
+            # Try to resolve from metadata or fallback to standard 1MHz
+            try:
+                from project_paths import resolve_sample_paths
+                import json
+                resolved = resolve_sample_paths(path)
+                if resolved.get("metadata_path") and resolved["metadata_path"].exists():
+                    with open(resolved["metadata_path"], "r", encoding="utf-8") as f:
+                        meta_dict = json.load(f)
+                    iq_sample_rate = float(meta_dict.get("sampling_frequency_hz", meta_dict.get("sample_rate", 1_000_000.0)))
+                else:
+                    iq_sample_rate = 1_000_000.0
+            except Exception:
+                iq_sample_rate = 1_000_000.0
 
         return _load_iq(
             path,
