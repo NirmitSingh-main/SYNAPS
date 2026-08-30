@@ -486,6 +486,13 @@
 
 
 
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from ai.preprocessing.iq_loader import load_iq_file
 
 from signal_processing.synchronization.frequency_sync import (
@@ -508,7 +515,6 @@ from signal_processing.demodulation.qam import demodulate_16qam
 
 import json
 import numpy as np
-from pathlib import Path
 
 
 def _generate_synthetic_signal(modulation: str, num_samples: int = 8192, rng_seed: int = 42):

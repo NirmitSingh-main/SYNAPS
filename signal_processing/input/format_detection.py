@@ -23,24 +23,11 @@ def detect_format(file_path: str) -> str:
 
     Raises
     ------
-    FileNotFoundError
-        If the path does not exist.
-
     ValueError
-        If the path is not a file or the format is unsupported.
+        If the format is unsupported.
     """
 
     path = Path(file_path)
-
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Signal file not found: {file_path}"
-        )
-
-    if not path.is_file():
-        raise ValueError(
-            f"Input path is not a file: {file_path}"
-        )
 
     extension = path.suffix.lower()
 
