@@ -7,7 +7,6 @@
   "frequency_offset_hz": -5000,
   "phase_offset_degrees": 270.0,
   "amplitude_scale": 0.75,
-  "signal_to_noise_ratio_db": 15,
   "samples": 20000,
   "samples_per_symbol": 10,
   "iq_file_convention": "interleaved little-endian float32 I,Q",

@@ -1,0 +1,28 @@
+SYNAPS TRANSFORMER EVALUATION
+=============================
+
+Model: ai\models\transformer.pth
+Dataset samples: 800
+Test samples: 120
+Test shape: (120, 1000, 4)
+Device: cpu
+
+Test Loss: 0.2262
+Test Accuracy: 94.17%
+
+PER-CLASS ACCURACY
+------------------
+BPSK: 83.33% (25/30)
+QPSK: 96.67% (29/30)
+FSK: 100.00% (30/30)
+QAM16: 96.67% (29/30)
+
+CONFUSION MATRIX
+----------------
+Rows = Actual, Columns = Predicted
+
+                 BPSK     QPSK      FSK    QAM16
+    BPSK       25        4        0        1
+    QPSK        1       29        0        0
+     FSK        0        0       30        0
+   QAM16        1        0        0       29
