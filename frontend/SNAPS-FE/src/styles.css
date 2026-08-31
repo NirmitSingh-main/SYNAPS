@@ -1,0 +1,154 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-signal: var(--signal);
+  --color-trace: var(--trace);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root {
+  --radius: 0.25rem;
+  /* light: warm bone / parchment */
+  --background: oklch(0.945 0.009 85);
+  --surface: oklch(0.965 0.007 85);
+  --foreground: oklch(0.26 0.008 75);
+  --card: oklch(0.965 0.007 85);
+  --card-foreground: oklch(0.26 0.008 75);
+  --popover: oklch(0.965 0.007 85);
+  --popover-foreground: oklch(0.26 0.008 75);
+  --primary: oklch(0.26 0.008 75);
+  --primary-foreground: oklch(0.965 0.007 85);
+  --secondary: oklch(0.91 0.01 85);
+  --secondary-foreground: oklch(0.3 0.008 75);
+  --muted: oklch(0.91 0.01 85);
+  --muted-foreground: oklch(0.5 0.012 75);
+  --accent: oklch(0.52 0.045 60);
+  --accent-foreground: oklch(0.965 0.007 85);
+  --signal: oklch(0.46 0.05 55);
+  --trace: oklch(0.55 0.025 250);
+  --destructive: oklch(0.52 0.16 27);
+  --destructive-foreground: oklch(0.97 0.005 85);
+  --border: oklch(0.86 0.012 85);
+  --border-strong: oklch(0.76 0.014 85);
+  --input: oklch(0.86 0.012 85);
+  --ring: oklch(0.55 0.03 65);
+}
+
+.dark {
+  /* dark: deep warm charcoal */
+  --background: oklch(0.185 0.005 90);
+  --surface: oklch(0.215 0.005 90);
+  --foreground: oklch(0.915 0.007 80);
+  --card: oklch(0.215 0.005 90);
+  --card-foreground: oklch(0.915 0.007 80);
+  --popover: oklch(0.215 0.005 90);
+  --popover-foreground: oklch(0.915 0.007 80);
+  --primary: oklch(0.915 0.007 80);
+  --primary-foreground: oklch(0.185 0.005 90);
+  --secondary: oklch(0.255 0.006 90);
+  --secondary-foreground: oklch(0.915 0.007 80);
+  --muted: oklch(0.255 0.006 90);
+  --muted-foreground: oklch(0.635 0.009 80);
+  --accent: oklch(0.62 0.04 62);
+  --accent-foreground: oklch(0.185 0.005 90);
+  --signal: oklch(0.6 0.04 60);
+  --trace: oklch(0.7 0.022 250);
+  --destructive: oklch(0.62 0.17 25);
+  --destructive-foreground: oklch(0.95 0.005 85);
+  --border: oklch(0.3 0.006 90);
+  --border-strong: oklch(0.4 0.007 90);
+  --input: oklch(0.3 0.006 90);
+  --ring: oklch(0.5 0.02 80);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    transition:
+      background-color 600ms ease,
+      color 600ms ease;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-signal) 30%, transparent);
+  }
+}
+
+@utility label-mono {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  color: var(--color-muted-foreground);
+}
+
+@utility rule-line {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    var(--color-border-strong),
+    color-mix(in oklab, var(--color-border) 40%, transparent)
+  );
+}
+
+@utility hover-arrow {
+  & .arrow {
+    display: inline-block;
+    transition: transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  &:hover .arrow {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
