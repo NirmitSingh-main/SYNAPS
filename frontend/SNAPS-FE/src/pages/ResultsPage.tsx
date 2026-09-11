@@ -10,7 +10,11 @@ import { FeatureTable } from "@/components/FeatureTable";
 import { PredictionChart } from "@/components/PredictionChart";
 import { ExplanationPanel } from "@/components/ExplanationPanel";
 import { demoAnalysis } from "@/data/demoData";
-import { getAnalysisData, getAnalysisFile, getAnalysisSample } from "@/lib/analysisStore";
+import {
+  getAnalysisData,
+  getAnalysisFile,
+  getAnalysisSample,
+} from "@/lib/analysisStore";
 
 function formatHz(hz: number): string {
   if (!hz || isNaN(hz)) return "0 Hz";
@@ -34,17 +38,32 @@ export function ResultsPage() {
   const file = getAnalysisFile();
   const sampleId = getAnalysisSample();
 
-  // Use live backend data if available, otherwise fallback to demoAnalysis
   const data = liveData || demoAnalysis;
   const isLive = !!liveData;
 
   const metrics = [
     { label: "Sample rate", value: formatHz(data.sampleRate), unit: "" },
     { label: "Duration", value: formatDuration(data.duration), unit: "" },
-    { label: "Occupied Bandwidth (99% Power)", value: formatHz(data.bandwidth), unit: "" },
-    { label: "SNR", value: `${typeof data.snr === "number" ? data.snr.toFixed(1) : data.snr} dB`, unit: "" },
-    { label: "Peak frequency", value: formatHz(data.peakFrequency), unit: "" },
-    { label: "Samples", value: formatCount(data.numSamples), unit: "" },
+    {
+      label: "Occupied Bandwidth (99% Power)",
+      value: formatHz(data.bandwidth),
+      unit: "",
+    },
+    {
+      label: "SNR",
+      value: `${typeof data.snr === "number" ? data.snr.toFixed(1) : data.snr} dB`,
+      unit: "",
+    },
+    {
+      label: "Peak frequency",
+      value: formatHz(data.peakFrequency),
+      unit: "",
+    },
+    {
+      label: "Samples",
+      value: formatCount(data.numSamples),
+      unit: "",
+    },
   ];
 
   return (
@@ -66,12 +85,15 @@ export function ResultsPage() {
               {/* Status badge */}
               <div className="shrink-0">
                 <span
-                  className={`inline-block border px-4 py-2 font-mono text-[0.65rem] tracking-[0.14em] ${isLive
+                  className={`inline-block border px-4 py-2 font-mono text-[0.65rem] tracking-[0.14em] ${
+                    isLive
                       ? "border-green-500/40 text-green-400 bg-green-500/10"
                       : "border-dashed border-border-strong text-muted-foreground"
-                    }`}
+                  }`}
                 >
-                  {isLive ? "LIVE ENGINE ANALYSIS · CONFIRMED" : "DEMO ANALYSIS · ILLUSTRATIVE DATA"}
+                  {isLive
+                    ? "LIVE ENGINE ANALYSIS · CONFIRMED"
+                    : "DEMO ANALYSIS · ILLUSTRATIVE DATA"}
                 </span>
               </div>
             </div>
@@ -79,8 +101,13 @@ export function ResultsPage() {
             {/* Source file reference */}
             <div className="mt-6 flex items-center gap-3">
               <span className="label-mono">Input Source</span>
-              <span className="font-mono text-[0.78rem] text-muted-foreground truncate max-w-md">
-                {file ? file.name : sampleId ? `Dataset sample: ${sampleId}` : data.filename} ({data.format || "IQ"})
+              <span className="max-w-md truncate font-mono text-[0.78rem] text-muted-foreground">
+                {file
+                  ? file.name
+                  : sampleId
+                    ? `Dataset sample: ${sampleId}`
+                    : data.filename}{" "}
+                ({data.format || "IQ"})
               </span>
             </div>
           </div>
@@ -104,6 +131,7 @@ export function ResultsPage() {
           <div className="mt-6">
             <SignalWaveform
               samples={data.waveformSamples}
+              time={data.waveformTime}
               isDemoData={!isLive}
             />
           </div>
@@ -112,10 +140,14 @@ export function ResultsPage() {
           <div className="mt-6 grid gap-6 md:grid-cols-2">
             <FrequencySpectrum
               bins={data.spectrumBins}
+              frequencies={data.spectrumFrequencies}
               isDemoData={!isLive}
             />
+
             <Spectrogram
               rows={data.spectrogramRows}
+              times={data.spectrogramTimes}
+              frequencies={data.spectrogramFrequencies}
               isDemoData={!isLive}
             />
           </div>

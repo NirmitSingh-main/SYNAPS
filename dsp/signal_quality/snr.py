@@ -1,39 +1,31 @@
 """
-Signal-to-Noise Ratio (SNR) estimation utilities.
-
-This module estimates the Signal-to-Noise Ratio of communication
-signals.
+Signal-to-Noise Ratio estimation utilities for communication signals.
 
 Supported input:
-    - Real-valued NumPy arrays
-    - Complex IQ NumPy arrays
+    - Real-valued NumPy signals
+    - Complex IQ signals
 
-The primary estimator uses the signal's power relative to an
-estimated noise power.
+SNR can be estimated using:
+    - spectral: PSD-based noise-floor estimation (default)
+    - difference: sample-to-sample difference method
+    - variance: variance-based estimation
 
-Main functions:
-    estimate_snr()
-    calculate_signal_power()
-    estimate_noise_power()
-    snr_from_powers()
-    snr()
+The spectral method is preferred for communication signals because
+modulation changes in the signal should not automatically be treated
+as noise.
 """
 
-
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
+from scipy.signal import periodogram
 
-
-# ---------------------------------------------------------------------
-# Input validation
-# ---------------------------------------------------------------------
 
 def _validate_signal(
     signal: np.ndarray,
 ) -> np.ndarray:
     """
-    Validate and convert a signal to a numeric NumPy array.
+    Validate and return the input signal.
     """
 
     signal = np.asarray(signal)
@@ -55,89 +47,55 @@ def _validate_signal(
             "Signal contains NaN or infinite values."
         )
 
-    if np.iscomplexobj(signal):
+    return signal
 
-        return np.asarray(
-            signal,
-            dtype=np.complex128,
-        )
-
-    return np.asarray(
-        signal,
-        dtype=np.float64,
-    )
-
-
-# ---------------------------------------------------------------------
-# Signal power
-# ---------------------------------------------------------------------
 
 def calculate_signal_power(
     signal: np.ndarray,
-    remove_mean: bool = False,
 ) -> float:
     """
     Calculate average signal power.
 
-    For real signals:
-
-        P = mean(x^2)
-
-    For complex IQ signals:
+    For complex IQ:
 
         P = mean(|x|^2)
 
-    Parameters
-    ----------
-    signal:
-        One-dimensional real or complex signal.
+    For real signals this reduces to:
 
-    remove_mean:
-        If True, remove the DC component before calculating power.
-
-    Returns
-    -------
-    float
-        Average signal power.
+        P = mean(x^2)
     """
 
-    signal = _validate_signal(
-        signal
+    signal = _validate_signal(signal)
+
+    power = np.mean(
+        np.abs(signal) ** 2
     )
 
-    if remove_mean:
+    return float(power)
 
-        signal = (
-            signal
-            - np.mean(signal)
-        )
-
-    power = float(
-        np.mean(
-            np.abs(signal) ** 2
-        )
-    )
-
-    if not np.isfinite(
-        power
-    ):
-        raise ValueError(
-            "Unable to calculate signal power."
-        )
-
-    return power
-
-
-# ---------------------------------------------------------------------
-# Noise power
-# ---------------------------------------------------------------------
 
 def estimate_noise_power(
     signal: np.ndarray,
-    method: str = "difference",
+    method: str = "spectral",
+    sampling_rate: float | None = None,
 ) -> float:
     """
     Estimate noise power.
+
+    Methods:
+
+        spectral:
+            Estimate the noise floor from the PSD.
+            Recommended for communication signals.
+
+        difference:
+            Estimate noise from sample-to-sample differences.
+            Preserved for compatibility with the original
+            implementation.
+
+        variance:
+            Estimate noise using signal variance.
+            Preserved for compatibility.
 
     Parameters
     ----------
@@ -147,155 +105,258 @@ def estimate_noise_power(
     method:
         Noise estimation method.
 
-        Supported methods:
-
-            "difference"
-                Estimates noise from sample-to-sample
-                differences.
-
-            "variance"
-                Uses variance around the signal mean.
-
-    Returns
-    -------
-    float
-        Estimated noise power.
+    sampling_rate:
+        Sampling rate in Hertz.
+        Required for the spectral method.
     """
 
-    signal = _validate_signal(
-        signal
-    )
+    signal = _validate_signal(signal)
 
-    method = str(
-        method
-    ).lower().strip()
-
-    if signal.size < 2:
-
-        raise ValueError(
-            "At least two samples are required "
-            "for noise estimation."
-        )
+    method = method.lower().strip()
 
     if method == "difference":
 
-        # Difference consecutive samples.
-        #
-        # For white noise:
-        #
-        # Var(x[n] - x[n-1]) = 2 * noise_power
-        #
-        # Therefore divide by 2.
+        if signal.size < 2:
+            raise ValueError(
+                "At least two samples are required "
+                "for difference-based noise estimation."
+            )
 
         differences = (
-            signal[1:]
-            - signal[:-1]
+            signal[1:] - signal[:-1]
         )
 
-        noise_power = float(
+        noise_power = (
             np.mean(
                 np.abs(differences) ** 2
             )
             / 2.0
         )
 
-    elif method == "variance":
+        return float(noise_power)
 
-        centered = (
-            signal
-            - np.mean(signal)
+    if method == "variance":
+
+        centered_signal = (
+            signal - np.mean(signal)
         )
 
-        noise_power = float(
-            np.mean(
-                np.abs(centered) ** 2
+        noise_power = np.mean(
+            np.abs(centered_signal) ** 2
+        )
+
+        return float(noise_power)
+
+    if method == "spectral":
+
+        if sampling_rate is None:
+            raise ValueError(
+                "sampling_rate is required "
+                "for spectral noise estimation."
             )
+
+        if not np.isfinite(
+            sampling_rate
+        ):
+            raise ValueError(
+                "sampling_rate must be finite."
+            )
+
+        if sampling_rate <= 0:
+            raise ValueError(
+                "sampling_rate must be greater than zero."
+            )
+
+        if signal.size < 8:
+            raise ValueError(
+                "At least 8 samples are required "
+                "for spectral noise estimation."
+            )
+
+        # ---------------------------------------------------------
+        # Calculate a two-sided PSD for complex IQ and a one-sided
+        # PSD for real-valued signals.
+        # ---------------------------------------------------------
+        if np.iscomplexobj(signal):
+
+            frequencies, psd = periodogram(
+                signal,
+                fs=sampling_rate,
+                window="hann",
+                detrend="constant",
+                return_onesided=False,
+                scaling="density",
+            )
+
+            frequencies = np.fft.fftshift(
+                frequencies
+            )
+
+            psd = np.fft.fftshift(
+                psd
+            )
+
+        else:
+
+            frequencies, psd = periodogram(
+                signal,
+                fs=sampling_rate,
+                window="hann",
+                detrend="constant",
+                return_onesided=True,
+                scaling="density",
+            )
+
+        frequencies = np.asarray(
+            frequencies,
+            dtype=np.float64,
         )
 
-    else:
-
-        raise ValueError(
-            "method must be either "
-            "'difference' or 'variance'."
+        psd = np.asarray(
+            psd,
+            dtype=np.float64,
         )
 
-    if not np.isfinite(
-        noise_power
-    ):
+        if psd.size == 0:
+            raise ValueError(
+                "Unable to calculate signal PSD."
+            )
 
-        raise ValueError(
-            "Unable to estimate noise power."
+        # Guard against tiny numerical negative values.
+        psd = np.maximum(
+            psd,
+            0.0,
         )
 
-    return noise_power
+        # ---------------------------------------------------------
+        # Estimate the noise floor.
+        #
+        # The median is deliberately used instead of the mean.
+        # Strong signal components can raise the mean considerably,
+        # while the median is more robust against those components.
+        # ---------------------------------------------------------
+        noise_psd = float(
+            np.median(psd)
+        )
 
+        if noise_psd <= 0.0:
+            return 0.0
 
-# ---------------------------------------------------------------------
-# SNR from powers
-# ---------------------------------------------------------------------
+        # ---------------------------------------------------------
+        # Determine the approximate occupied signal region.
+        #
+        # Frequencies whose PSD is substantially above the noise
+        # floor are treated as signal. The threshold is intentionally
+        # conservative so that normal spectral leakage does not make
+        # the entire spectrum look like signal.
+        # ---------------------------------------------------------
+        signal_threshold = (
+            noise_psd * 3.0
+        )
+
+        signal_mask = (
+            psd > signal_threshold
+        )
+
+        # If the threshold does not identify a meaningful region,
+        # fall back to the complete available bandwidth.
+        if np.count_nonzero(
+            signal_mask
+        ) < 2:
+
+            if np.iscomplexobj(signal):
+                occupied_bandwidth = float(
+                    sampling_rate
+                )
+            else:
+                occupied_bandwidth = float(
+                    sampling_rate / 2.0
+                )
+
+        else:
+
+            signal_frequencies = (
+                frequencies[signal_mask]
+            )
+
+            occupied_bandwidth = float(
+                np.max(signal_frequencies)
+                - np.min(signal_frequencies)
+            )
+
+            # Avoid zero-width bands.
+            if occupied_bandwidth <= 0.0:
+
+                if np.iscomplexobj(signal):
+                    occupied_bandwidth = float(
+                        sampling_rate
+                    )
+                else:
+                    occupied_bandwidth = float(
+                        sampling_rate / 2.0
+                    )
+
+        # ---------------------------------------------------------
+        # Noise power inside the estimated signal bandwidth.
+        #
+        # PSD has units of power/Hz, so:
+        #
+        #     noise power = noise PSD × bandwidth
+        # ---------------------------------------------------------
+        noise_power = (
+            noise_psd
+            * occupied_bandwidth
+        )
+
+        return float(
+            max(noise_power, 0.0)
+        )
+
+    raise ValueError(
+        "Unsupported noise estimation method. "
+        "Use 'spectral', 'difference', or 'variance'."
+    )
+
 
 def snr_from_powers(
     signal_power: float,
     noise_power: float,
 ) -> float:
     """
-    Calculate SNR in decibels from signal and noise power.
-
-    Formula:
-
-        SNR(dB) = 10 * log10(P_signal / P_noise)
-
-    Parameters
-    ----------
-    signal_power:
-        Signal power.
-
-    noise_power:
-        Noise power.
-
-    Returns
-    -------
-    float
-        SNR in decibels.
+    Calculate SNR in decibels from signal and noise powers.
     """
 
     if not np.isfinite(
         signal_power
     ):
         raise ValueError(
-            "signal_power must be finite."
+            "Signal power must be finite."
         )
 
     if not np.isfinite(
         noise_power
     ):
         raise ValueError(
-            "noise_power must be finite."
+            "Noise power must be finite."
         )
 
     if signal_power < 0.0:
-
         raise ValueError(
-            "signal_power cannot be negative."
+            "Signal power cannot be negative."
         )
 
     if noise_power < 0.0:
-
         raise ValueError(
-            "noise_power cannot be negative."
+            "Noise power cannot be negative."
         )
-
-    if noise_power == 0.0:
-
-        if signal_power > 0.0:
-            return float("inf")
-
-        return 0.0
 
     if signal_power == 0.0:
         return float("-inf")
 
-    snr_db = float(
+    if noise_power == 0.0:
+        return float("inf")
+
+    return float(
         10.0
         * np.log10(
             signal_power
@@ -303,20 +364,14 @@ def snr_from_powers(
         )
     )
 
-    return snr_db
-
-
-# ---------------------------------------------------------------------
-# Main SNR estimator
-# ---------------------------------------------------------------------
 
 def estimate_snr(
     signal: np.ndarray,
-    method: str = "difference",
-    signal_power: Optional[float] = None,
+    method: str = "spectral",
+    sampling_rate: float | None = None,
 ) -> dict[str, Any]:
     """
-    Estimate the Signal-to-Noise Ratio.
+    Estimate Signal-to-Noise Ratio.
 
     Parameters
     ----------
@@ -324,147 +379,65 @@ def estimate_snr(
         One-dimensional real or complex signal.
 
     method:
-        Noise estimation method.
+        SNR estimation method.
 
-        Supported:
+        Default:
+            "spectral"
 
+        Other supported methods:
             "difference"
             "variance"
 
-    signal_power:
-        Optional externally calculated signal power.
+    sampling_rate:
+        Sampling rate in Hertz.
 
-        If None, signal power is calculated automatically.
+        Required when using the spectral method.
 
     Returns
     -------
     dict
-        Contains:
+        Dictionary containing:
 
             snr_db
             signal_power
             noise_power
-            signal_to_noise_ratio
-            noise_estimation_method
-            number_of_samples
-            is_complex
+            method
     """
 
     signal = _validate_signal(
         signal
     )
 
-    if signal_power is None:
-
-        calculated_signal_power = (
-            calculate_signal_power(
-                signal
-            )
+    signal_power = (
+        calculate_signal_power(
+            signal
         )
-
-    else:
-
-        calculated_signal_power = float(
-            signal_power
-        )
-
-        if not np.isfinite(
-            calculated_signal_power
-        ):
-
-            raise ValueError(
-                "signal_power must be finite."
-            )
-
-        if calculated_signal_power < 0.0:
-
-            raise ValueError(
-                "signal_power cannot be negative."
-            )
-
-    noise_power = estimate_noise_power(
-        signal,
-        method=method,
     )
 
-    snr_db = snr_from_powers(
-        calculated_signal_power,
-        noise_power,
+    noise_power = (
+        estimate_noise_power(
+            signal,
+            method=method,
+            sampling_rate=sampling_rate,
+        )
     )
 
-    result: dict[str, Any] = {
-        "snr_db": float(
-            snr_db
-        ),
+    snr_db = (
+        snr_from_powers(
+            signal_power,
+            noise_power,
+        )
+    )
 
+    return {
+        "snr_db": float(snr_db),
         "signal_power": float(
-            calculated_signal_power
+            signal_power
         ),
-
         "noise_power": float(
             noise_power
         ),
-
-        "signal_to_noise_ratio": (
-            float(
-                calculated_signal_power
-                / noise_power
-            )
-            if noise_power > 0.0
-            else float("inf")
-        ),
-
-        "noise_estimation_method": (
-            str(method).lower().strip()
-        ),
-
-        "number_of_samples": int(
-            signal.size
-        ),
-
-        "is_complex": bool(
-            np.iscomplexobj(signal)
+        "method": str(
+            method.lower().strip()
         ),
     }
-
-    return result
-
-
-# ---------------------------------------------------------------------
-# Compatibility wrapper
-# ---------------------------------------------------------------------
-
-def snr(
-    signal: np.ndarray,
-    method: str = "difference",
-) -> dict[str, Any]:
-    """
-    Compatibility wrapper around estimate_snr().
-    """
-
-    return estimate_snr(
-        signal,
-        method=method,
-    )
-
-
-# ---------------------------------------------------------------------
-# Convenience function
-# ---------------------------------------------------------------------
-
-def get_snr_db(
-    signal: np.ndarray,
-    method: str = "difference",
-) -> float:
-    """
-    Return only the SNR value in decibels.
-    """
-
-    result = estimate_snr(
-        signal,
-        method=method,
-    )
-
-    return float(
-        result["snr_db"]
-    )

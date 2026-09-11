@@ -7,9 +7,27 @@ Supported input types:
     - WAV files
     - Raw IQ files
 
+Supported modulation-aware CFO estimation:
+    - FSK / 2FSK
+    - BPSK
+    - QPSK
+    - QAM / 16QAM
+
 Carrier Frequency Offset is calculated as:
 
     CFO = measured_frequency - reference_frequency
+
+For symmetric 2FSK signals, the carrier center is estimated
+from the midpoint between the lower and upper FSK tones.
+
+For PSK signals, a power-law estimator is used to suppress
+the modulation phase pattern and estimate the carrier rotation.
+
+For QAM signals, the fourth-power estimator is used as a
+carrier-frequency estimator, with a generic spectral fallback
+when the fourth-power spectrum does not contain a reliable peak.
+
+If no modulation is supplied, the generic estimator is used.
 
 Positive CFO:
     Measured frequency is higher than the reference frequency.
@@ -37,11 +55,20 @@ def _validate_signal(
     signal = np.asarray(signal)
 
     if signal.size == 0:
-        raise ValueError("Signal cannot be empty.")
+        raise ValueError(
+            "Signal cannot be empty."
+        )
 
     if signal.ndim != 1:
         raise ValueError(
             "Signal must be one-dimensional."
+        )
+
+    if not np.isfinite(
+        sampling_rate
+    ):
+        raise ValueError(
+            "Sampling rate must be finite."
         )
 
     if sampling_rate <= 0:
@@ -49,7 +76,9 @@ def _validate_signal(
             "Sampling rate must be greater than zero."
         )
 
-    if not np.all(np.isfinite(signal)):
+    if not np.all(
+        np.isfinite(signal)
+    ):
         raise ValueError(
             "Signal contains NaN or infinite values."
         )
@@ -89,31 +118,58 @@ def _prepare_signal(
     )
 
     return analytic_signal
+
+
+def _frequency_axis(
+    number_of_samples: int,
+    sampling_rate: float,
+) -> np.ndarray:
+    """
+    Return a centered FFT frequency axis.
+    """
+
+    return np.fft.fftshift(
+        np.fft.fftfreq(
+            number_of_samples,
+            d=1.0 / sampling_rate,
+        )
+    )
+
+
 def _estimate_carrier_frequency(
     signal: np.ndarray,
     sampling_rate: float,
 ) -> float:
     """
-    Estimate the dominant carrier frequency.
+    Estimate the dominant positive-frequency component.
 
-    The Fast Fourier Transform is used to locate
-    the strongest positive-frequency component.
+    This is retained as the generic fallback estimator.
+
+    Important:
+        For FSK, the strongest tone is not necessarily the
+        carrier center. The FSK-specific estimator should be
+        used when modulation information is available.
     """
 
-    signal = _prepare_signal(signal)
+    signal = _prepare_signal(
+        signal
+    )
 
     number_of_samples = signal.size
 
-    # Remove the average value to reduce the
-    # effect of the DC component.
-    signal = signal - np.mean(signal)
+    signal = (
+        signal
+        - np.mean(signal)
+    )
 
-    # Apply a Hann window to reduce spectral leakage.
-    window = np.hanning(number_of_samples)
+    window = np.hanning(
+        number_of_samples
+    )
 
-    windowed_signal = signal * window
+    windowed_signal = (
+        signal * window
+    )
 
-    # Calculate the Fast Fourier Transform.
     spectrum = np.fft.fft(
         windowed_signal
     )
@@ -123,40 +179,459 @@ def _estimate_carrier_frequency(
         d=1.0 / sampling_rate,
     )
 
-    # Keep only positive frequencies.
-    positive_mask = frequencies >= 0
+    positive_mask = (
+        frequencies >= 0
+    )
 
     positive_spectrum = np.abs(
         spectrum[positive_mask]
     )
 
-    positive_frequencies = frequencies[
-        positive_mask
-    ]
+    positive_frequencies = (
+        frequencies[positive_mask]
+    )
 
-    # Ignore the DC component.
     if positive_spectrum.size > 1:
         positive_spectrum[0] = 0.0
 
-    # Find the strongest frequency component.
-    peak_index = np.argmax(
-        positive_spectrum
+    if positive_spectrum.size == 0:
+        return 0.0
+
+    peak_index = int(
+        np.argmax(
+            positive_spectrum
+        )
     )
+
+    return float(
+        positive_frequencies[
+            peak_index
+        ]
+    )
+
+
+def _estimate_power_law_frequency(
+    signal: np.ndarray,
+    sampling_rate: float,
+    power: int,
+) -> tuple[float, float]:
+    """
+    Estimate carrier frequency using a power-law transform.
+
+    Returns:
+        measured_frequency_hz
+        peak_strength_ratio
+
+    The transformed signal is:
+
+        y[n] = x[n] ** power
+
+    For PSK this suppresses much of the data-dependent phase
+    structure and produces a spectral component related to
+    the carrier-frequency rotation.
+
+    The returned frequency is divided by `power` to recover
+    the original carrier frequency.
+    """
+
+    if power < 2:
+        raise ValueError(
+            "Power must be at least 2."
+        )
+
+    signal = _prepare_signal(
+        signal
+    )
+
+    signal = (
+        signal
+        - np.mean(signal)
+    )
+
+    if np.allclose(
+        signal,
+        0.0,
+    ):
+        return 0.0, 0.0
+
+    transformed = (
+        signal ** power
+    )
+
+    number_of_samples = (
+        transformed.size
+    )
+
+    window = np.hanning(
+        number_of_samples
+    )
+
+    spectrum = np.abs(
+        np.fft.fftshift(
+            np.fft.fft(
+                transformed * window
+            )
+        )
+    )
+
+    frequencies = _frequency_axis(
+        number_of_samples,
+        sampling_rate,
+    )
+
+    if spectrum.size == 0:
+        return 0.0, 0.0
+
+    # Ignore DC.
+    dc_index = int(
+        np.argmin(
+            np.abs(frequencies)
+        )
+    )
+
+    spectrum[
+        max(0, dc_index - 1):
+        min(spectrum.size, dc_index + 2)
+    ] = 0.0
+
+    peak_index = int(
+        np.argmax(
+            spectrum
+        )
+    )
+
+    peak_frequency = float(
+        frequencies[peak_index]
+    )
+
+    peak_value = float(
+        spectrum[peak_index]
+    )
+
+    nonzero_spectrum = spectrum[
+        spectrum > 0.0
+    ]
+
+    if nonzero_spectrum.size == 0:
+        return 0.0, 0.0
+
+    median_level = float(
+        np.median(
+            nonzero_spectrum
+        )
+    )
+
+    if median_level <= 0.0:
+        peak_strength_ratio = float(
+            "inf"
+        )
+    else:
+        peak_strength_ratio = (
+            peak_value
+            / median_level
+        )
 
     measured_frequency = (
-        positive_frequencies[peak_index]
+        peak_frequency / power
     )
 
-    return float(measured_frequency)
+    return (
+        float(measured_frequency),
+        float(peak_strength_ratio),
+    )
+
+
+def _estimate_psk_frequency(
+    signal: np.ndarray,
+    sampling_rate: float,
+    modulation: str,
+) -> dict[str, float]:
+    """
+    Estimate carrier frequency for PSK.
+
+    BPSK uses a second-power estimator.
+
+    QPSK uses a fourth-power estimator.
+
+    The transformed frequency is divided by the corresponding
+    power to recover the original carrier-frequency estimate.
+    """
+
+    modulation_name = (
+        modulation.upper()
+    )
+
+    if modulation_name in {
+        "BPSK",
+        "2PSK",
+        "2-PSK",
+    }:
+        power = 2
+
+    elif modulation_name in {
+        "QPSK",
+        "4PSK",
+        "4-PSK",
+    }:
+        power = 4
+
+    else:
+        power = 4
+
+    frequency, strength = (
+        _estimate_power_law_frequency(
+            signal,
+            sampling_rate,
+            power,
+        )
+    )
+
+    return {
+        "measured_frequency_hz": float(
+            frequency
+        ),
+        "peak_strength_ratio": float(
+            strength
+        ),
+    }
+
+
+def _estimate_qam_frequency(
+    signal: np.ndarray,
+    sampling_rate: float,
+) -> dict[str, float]:
+    """
+    Estimate carrier frequency for QAM.
+
+    A fourth-power estimator is used first. If the transformed
+    spectrum does not contain a meaningful peak, the generic
+    spectral estimator is used as a fallback.
+
+    The generic fallback is retained because QAM data does not
+    always produce a strong fourth-power spectral line.
+    """
+
+    power_law_frequency, strength = (
+        _estimate_power_law_frequency(
+            signal,
+            sampling_rate,
+            4,
+        )
+    )
+
+    # A strong transformed spectral peak is preferred.
+    if np.isfinite(strength) and strength >= 3.0:
+
+        return {
+            "measured_frequency_hz": float(
+                power_law_frequency
+            ),
+            "peak_strength_ratio": float(
+                strength
+            ),
+        }
+
+    # Fall back to the original generic estimator.
+    generic_frequency = (
+        _estimate_carrier_frequency(
+            signal,
+            sampling_rate,
+        )
+    )
+
+    return {
+        "measured_frequency_hz": float(
+            generic_frequency
+        ),
+        "peak_strength_ratio": float(
+            strength
+        ),
+    }
+
+
+def estimate_fsk_carrier_center(
+    signal: np.ndarray,
+    sampling_rate: float,
+    reference_frequency_hz: float = 0.0,
+) -> dict[str, Any]:
+    """
+    Estimate carrier center frequency, CFO, tone separation,
+    and frequency deviation for symmetric 2FSK signals.
+
+    For symmetric 2FSK:
+
+        f_center = (f_upper + f_lower) / 2
+
+        cfo_hz = f_center - reference_frequency_hz
+
+        tone_separation_hz = f_upper - f_lower
+
+        frequency_deviation_hz = tone_separation_hz / 2
+
+    The carrier center is used for CFO rather than the strongest
+    individual FSK tone.
+    """
+
+    signal = _validate_signal(
+        signal,
+        sampling_rate,
+    )
+
+    signal = _prepare_signal(
+        signal
+    )
+
+    signal = (
+        signal
+        - np.mean(signal)
+    )
+
+    num_samples = signal.size
+
+    windowed = (
+        signal
+        * np.hanning(
+            num_samples
+        )
+    )
+
+    spec = np.abs(
+        np.fft.fftshift(
+            np.fft.fft(
+                windowed
+            )
+        )
+    )
+
+    freqs = _frequency_axis(
+        num_samples,
+        sampling_rate,
+    )
+
+    neg_mask = (
+        freqs < -5000.0
+    )
+
+    pos_mask = (
+        freqs > 5000.0
+    )
+
+    if (
+        np.any(neg_mask)
+        and np.any(pos_mask)
+    ):
+
+        neg_spec = spec[
+            neg_mask
+        ]
+
+        neg_freqs = freqs[
+            neg_mask
+        ]
+
+        pos_spec = spec[
+            pos_mask
+        ]
+
+        pos_freqs = freqs[
+            pos_mask
+        ]
+
+        lower_index = int(
+            np.argmax(
+                neg_spec
+            )
+        )
+
+        upper_index = int(
+            np.argmax(
+                pos_spec
+            )
+        )
+
+        f_lower = float(
+            neg_freqs[
+                lower_index
+            ]
+        )
+
+        f_upper = float(
+            pos_freqs[
+                upper_index
+            ]
+        )
+
+        f_center = float(
+            (f_upper + f_lower)
+            / 2.0
+        )
+
+        cfo_hz = float(
+            f_center
+            - reference_frequency_hz
+        )
+
+        tone_sep = float(
+            f_upper - f_lower
+        )
+
+        f_dev = float(
+            tone_sep / 2.0
+        )
+
+    else:
+
+        peak_idx = int(
+            np.argmax(spec)
+        )
+
+        f_center = float(
+            freqs[peak_idx]
+        )
+
+        cfo_hz = float(
+            f_center
+            - reference_frequency_hz
+        )
+
+        f_lower = f_center
+        f_upper = f_center
+        tone_sep = 0.0
+        f_dev = 0.0
+
+    return {
+        "carrier_center_hz": float(
+            f_center
+        ),
+        "cfo_hz": float(
+            cfo_hz
+        ),
+        "reference_frequency_hz": float(
+            reference_frequency_hz
+        ),
+        "dominant_lower_tone_hz": float(
+            f_lower
+        ),
+        "dominant_upper_tone_hz": float(
+            f_upper
+        ),
+        "tone_separation_hz": float(
+            tone_sep
+        ),
+        "frequency_deviation_hz": float(
+            f_dev
+        ),
+    }
 
 
 def estimate_cfo(
     signal: np.ndarray,
     sampling_rate: float,
-    reference_frequency_hz: float,
+    reference_frequency_hz: float = 0.0,
+    modulation: str | None = None,
 ) -> dict[str, Any]:
     """
-    Estimate Carrier Frequency Offset from a signal.
+    Estimate Carrier Frequency Offset.
 
     Parameters
     ----------
@@ -167,17 +642,33 @@ def estimate_cfo(
         Signal sampling rate in Hertz.
 
     reference_frequency_hz:
-        Expected/reference carrier frequency
-        in Hertz.
+        Expected/reference carrier frequency in Hertz.
+
+    modulation:
+        Optional modulation type.
+
+        Supported modulation-aware values include:
+
+            FSK
+            2FSK
+            BPSK
+            QPSK
+            QAM
+            16QAM
+
+        If omitted or unknown, the generic estimator is used.
 
     Returns
     -------
     dict
         Dictionary containing:
 
-        measured_frequency_hz
-        reference_frequency_hz
-        cfo_hz
+            measured_frequency_hz
+            reference_frequency_hz
+            cfo_hz
+
+        Additional modulation-specific information may also
+        be returned.
     """
 
     signal = _validate_signal(
@@ -192,6 +683,189 @@ def estimate_cfo(
             "Reference frequency must be finite."
         )
 
+    modulation_name = (
+        str(modulation)
+        .strip()
+        .upper()
+        if modulation is not None
+        else ""
+    )
+
+    # ---------------------------------------------------------
+    # FSK
+    # ---------------------------------------------------------
+    if modulation_name in {
+        "FSK",
+        "2FSK",
+        "2-FSK",
+    }:
+
+        result = (
+            estimate_fsk_carrier_center(
+                signal,
+                sampling_rate,
+                reference_frequency_hz=(
+                    reference_frequency_hz
+                ),
+            )
+        )
+
+        return {
+            "measured_frequency_hz": float(
+                result[
+                    "carrier_center_hz"
+                ]
+            ),
+            "reference_frequency_hz": float(
+                reference_frequency_hz
+            ),
+            "cfo_hz": float(
+                result["cfo_hz"]
+            ),
+            "carrier_center_hz": float(
+                result[
+                    "carrier_center_hz"
+                ]
+            ),
+            "dominant_lower_tone_hz": float(
+                result[
+                    "dominant_lower_tone_hz"
+                ]
+            ),
+            "dominant_upper_tone_hz": float(
+                result[
+                    "dominant_upper_tone_hz"
+                ]
+            ),
+            "tone_separation_hz": float(
+                result[
+                    "tone_separation_hz"
+                ]
+            ),
+            "frequency_deviation_hz": float(
+                result[
+                    "frequency_deviation_hz"
+                ]
+            ),
+            "estimator": "fsk_carrier_center",
+        }
+
+    # ---------------------------------------------------------
+    # BPSK / QPSK
+    # ---------------------------------------------------------
+    if modulation_name in {
+        "BPSK",
+        "2PSK",
+        "2-PSK",
+        "QPSK",
+        "4PSK",
+        "4-PSK",
+    }:
+
+        result = _estimate_psk_frequency(
+            signal,
+            sampling_rate,
+            modulation_name,
+        )
+
+        measured_frequency_hz = float(
+            result[
+                "measured_frequency_hz"
+            ]
+        )
+
+        cfo_hz = float(
+            measured_frequency_hz
+            - reference_frequency_hz
+        )
+
+        return {
+            "measured_frequency_hz": float(
+                measured_frequency_hz
+            ),
+            "reference_frequency_hz": float(
+                reference_frequency_hz
+            ),
+            "cfo_hz": float(
+                cfo_hz
+            ),
+            "estimator": "power_law",
+            "power": (
+                2
+                if modulation_name in {
+                    "BPSK",
+                    "2PSK",
+                    "2-PSK",
+                }
+                else 4
+            ),
+            "peak_strength_ratio": float(
+                result[
+                    "peak_strength_ratio"
+                ]
+            ),
+        }
+
+    # ---------------------------------------------------------
+    # QAM
+    # ---------------------------------------------------------
+    if modulation_name in {
+        "QAM",
+        "16QAM",
+        "64QAM",
+        "256QAM",
+    }:
+
+        result = _estimate_qam_frequency(
+            signal,
+            sampling_rate,
+        )
+
+        measured_frequency_hz = float(
+            result[
+                "measured_frequency_hz"
+            ]
+        )
+
+        cfo_hz = float(
+            measured_frequency_hz
+            - reference_frequency_hz
+        )
+
+        return {
+            "measured_frequency_hz": float(
+                measured_frequency_hz
+            ),
+            "reference_frequency_hz": float(
+                reference_frequency_hz
+            ),
+            "cfo_hz": float(
+                cfo_hz
+            ),
+            "estimator": (
+                "qam_fourth_power"
+                if (
+                    np.isfinite(
+                        result[
+                            "peak_strength_ratio"
+                        ]
+                    )
+                    and result[
+                        "peak_strength_ratio"
+                    ] >= 3.0
+                )
+                else "generic_fallback"
+            ),
+            "peak_strength_ratio": float(
+                result[
+                    "peak_strength_ratio"
+                ]
+            ),
+        }
+
+    # ---------------------------------------------------------
+    # Generic fallback
+    # ---------------------------------------------------------
     measured_frequency_hz = (
         _estimate_carrier_frequency(
             signal,
@@ -199,7 +873,7 @@ def estimate_cfo(
         )
     )
 
-    cfo_hz = (
+    cfo_hz = float(
         measured_frequency_hz
         - reference_frequency_hz
     )
@@ -211,67 +885,10 @@ def estimate_cfo(
         "reference_frequency_hz": float(
             reference_frequency_hz
         ),
-        "cfo_hz": float(cfo_hz),
-    }
-
-
-def estimate_fsk_carrier_center(
-    signal: np.ndarray,
-    sampling_rate: float,
-    reference_frequency_hz: float = 0.0,
-) -> dict[str, Any]:
-    """
-    Estimate carrier center frequency, true CFO, tone separation, and frequency deviation
-    for symmetric 2FSK signals.
-
-    For symmetric 2FSK:
-        f_center = (f_upper + f_lower) / 2.0
-        cfo_hz = f_center - reference_frequency_hz
-        tone_separation_hz = f_upper - f_lower = 2 * Delta_f
-        frequency_deviation_hz = tone_separation_hz / 2.0 = Delta_f
-    """
-    signal = _validate_signal(signal, sampling_rate)
-    signal = _prepare_signal(signal)
-    signal = signal - np.mean(signal)
-
-    num_samples = signal.size
-    windowed = signal * np.hanning(num_samples)
-    spec = np.abs(np.fft.fftshift(np.fft.fft(windowed)))
-    freqs = np.fft.fftshift(np.fft.fftfreq(num_samples, d=1.0 / sampling_rate))
-
-    # Search for dominant tone in positive and negative bands
-    neg_mask = freqs < -5000.0
-    pos_mask = freqs > 5000.0
-
-    if np.any(neg_mask) and np.any(pos_mask):
-        neg_spec = spec[neg_mask]
-        neg_freqs = freqs[neg_mask]
-        pos_spec = spec[pos_mask]
-        pos_freqs = freqs[pos_mask]
-
-        f_lower = float(neg_freqs[np.argmax(neg_spec)])
-        f_upper = float(pos_freqs[np.argmax(pos_spec)])
-        f_center = float((f_upper + f_lower) / 2.0)
-        tone_sep = float(f_upper - f_lower)
-        f_dev = float(tone_sep / 2.0)
-        cfo_hz = float(f_center - reference_frequency_hz)
-    else:
-        peak_idx = int(np.argmax(spec))
-        f_center = float(freqs[peak_idx])
-        cfo_hz = float(f_center - reference_frequency_hz)
-        f_lower = f_center
-        f_upper = f_center
-        tone_sep = 0.0
-        f_dev = 0.0
-
-    return {
-        "carrier_center_hz": f_center,
-        "cfo_hz": cfo_hz,
-        "reference_frequency_hz": float(reference_frequency_hz),
-        "dominant_lower_tone_hz": f_lower,
-        "dominant_upper_tone_hz": f_upper,
-        "tone_separation_hz": tone_sep,
-        "frequency_deviation_hz": f_dev,
+        "cfo_hz": float(
+            cfo_hz
+        ),
+        "estimator": "generic_peak",
     }
 
 
@@ -285,31 +902,30 @@ def _load_wav_file(
 
     Integer WAV samples are converted to floating
     point and normalized.
-
-    Returns
-    -------
-    tuple
-        signal, sampling_rate
     """
 
     sampling_rate, signal = wavfile.read(
         file_path
     )
 
-    signal = np.asarray(signal)
+    signal = np.asarray(
+        signal
+    )
 
-    # Convert stereo audio to mono.
     if signal.ndim == 2:
+
         signal = np.mean(
-            signal.astype(np.float64),
+            signal.astype(
+                np.float64
+            ),
             axis=1,
         )
 
-    # Convert integer samples to floating point.
     if np.issubdtype(
         signal.dtype,
         np.integer,
     ):
+
         signal = signal.astype(
             np.float64
         )
@@ -319,12 +935,14 @@ def _load_wav_file(
         )
 
         if maximum_amplitude > 0:
+
             signal = (
                 signal
                 / maximum_amplitude
             )
 
     else:
+
         signal = signal.astype(
             np.float64
         )
@@ -337,7 +955,9 @@ def _load_wav_file(
 
 def _load_iq_file(
     file_path: Path,
-    iq_dtype: np.dtype = np.dtype(np.float32),
+    iq_dtype: np.dtype = np.dtype(
+        np.float32
+    ),
     iq_order: str = "IQ",
 ) -> np.ndarray:
     """
@@ -346,22 +966,6 @@ def _load_iq_file(
     Expected format:
 
         I, Q, I, Q, I, Q, ...
-
-    Parameters
-    ----------
-    file_path:
-        Path to the IQ file.
-
-    iq_dtype:
-        NumPy data type of each I/Q sample.
-
-    iq_order:
-        Either "IQ" or "QI".
-
-    Returns
-    -------
-    numpy.ndarray
-        Complex IQ signal.
     """
 
     raw_data = np.fromfile(
@@ -374,16 +978,19 @@ def _load_iq_file(
             "IQ file is empty."
         )
 
-    # Every IQ sample requires two values:
-    # one In-phase value and one Quadrature value.
     if raw_data.size % 2 != 0:
         raise ValueError(
             "IQ file must contain an even number "
             "of values."
         )
 
-    first_component = raw_data[0::2]
-    second_component = raw_data[1::2]
+    first_component = raw_data[
+        0::2
+    ]
+
+    second_component = raw_data[
+        1::2
+    ]
 
     iq_order = iq_order.upper()
 
@@ -398,13 +1005,19 @@ def _load_iq_file(
         i_samples = second_component
 
     else:
+
         raise ValueError(
             "iq_order must be either 'IQ' or 'QI'."
         )
 
     signal = (
-        i_samples.astype(np.float64)
-        + 1j * q_samples.astype(np.float64)
+        i_samples.astype(
+            np.float64
+        )
+        + 1j
+        * q_samples.astype(
+            np.float64
+        )
     )
 
     return signal
@@ -414,68 +1027,47 @@ def estimate_cfo_from_file(
     file_path: str | Path,
     reference_frequency_hz: float,
     sampling_rate: float | None = None,
-    iq_dtype: np.dtype = np.dtype(np.float32),
+    iq_dtype: np.dtype = np.dtype(
+        np.float32
+    ),
     iq_order: str = "IQ",
+    modulation: str | None = None,
 ) -> dict[str, Any]:
     """
     Estimate Carrier Frequency Offset directly
     from a WAV or IQ file.
-
-    Parameters
-    ----------
-    file_path:
-        Path to a .wav or .iq file.
-
-    reference_frequency_hz:
-        Expected/reference carrier frequency
-        in Hertz.
-
-    sampling_rate:
-        Sampling rate for raw IQ files.
-
-        WAV files do not require this because
-        their sampling rate is stored in the WAV
-        file header.
-
-    iq_dtype:
-        Data type used by the raw IQ file.
-
-    iq_order:
-        IQ ordering.
-
-        "IQ" means:
-            I, Q, I, Q, ...
-
-        "QI" means:
-            Q, I, Q, I, ...
-
-    Returns
-    -------
-    dict
-        CFO estimation result and file metadata.
     """
 
-    file_path = Path(file_path)
+    file_path = Path(
+        file_path
+    )
 
     if not file_path.exists():
         raise FileNotFoundError(
             f"File not found: {file_path}"
         )
 
-    extension = file_path.suffix.lower()
+    extension = (
+        file_path.suffix.lower()
+    )
 
     if extension == ".wav":
 
         signal, file_sampling_rate = (
-            _load_wav_file(file_path)
+            _load_wav_file(
+                file_path
+            )
         )
 
-        sampling_rate = file_sampling_rate
+        sampling_rate = (
+            file_sampling_rate
+        )
 
         result = estimate_cfo(
             signal,
             sampling_rate,
             reference_frequency_hz,
+            modulation=modulation,
         )
 
     elif extension == ".iq":
@@ -496,6 +1088,7 @@ def estimate_cfo_from_file(
             signal,
             sampling_rate,
             reference_frequency_hz,
+            modulation=modulation,
         )
 
     else:
@@ -505,7 +1098,9 @@ def estimate_cfo_from_file(
             "Only .wav and .iq files are supported."
         )
 
-    result["file"] = str(file_path)
+    result["file"] = str(
+        file_path
+    )
 
     result["file_type"] = extension
 

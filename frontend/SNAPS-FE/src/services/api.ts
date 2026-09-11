@@ -31,12 +31,22 @@ export interface AnalysisResponse {
   snr: number;
   peakFrequency: number;
   numSamples: number;
+
   predictionBreakdown: PredictionItem[];
   features: FeatureItem[];
   explanation: string;
+
+  // ---- Real signal visualization data ----
   waveformSamples: number[];
+  waveformTime?: number[];
+
   spectrumBins: number[];
+  spectrumFrequencies?: number[];
+
   spectrogramRows: number[][];
+  spectrogramTimes?: number[];
+  spectrogramFrequencies?: number[];
+
   raw_report?: any;
 }
 
@@ -61,8 +71,12 @@ export interface HealthStatus {
   version: string;
 }
 
-async function fetchWithFallback(endpoint: string, options?: RequestInit): Promise<Response> {
+async function fetchWithFallback(
+  endpoint: string,
+  options?: RequestInit
+): Promise<Response> {
   const url = `${API_BASE_URL}${endpoint}`;
+
   try {
     const res = await fetch(url, options);
     return res;
@@ -70,6 +84,7 @@ async function fetchWithFallback(endpoint: string, options?: RequestInit): Promi
     if (!API_BASE_URL) {
       return await fetch(`http://localhost:8000${endpoint}`, options);
     }
+
     throw err;
   }
 }
@@ -80,10 +95,15 @@ async function fetchWithFallback(endpoint: string, options?: RequestInit): Promi
 export async function checkBackendHealth(): Promise<HealthStatus> {
   try {
     const res = await fetchWithFallback("/health");
-    if (!res.ok) throw new Error(`Health check failed: ${res.statusText}`);
+
+    if (!res.ok) {
+      throw new Error(`Health check failed: ${res.statusText}`);
+    }
+
     return await res.json();
   } catch (err) {
     console.warn("Backend health check failed:", err);
+
     return {
       status: "OFFLINE",
       service: "SYNAPS Backend",
@@ -99,8 +119,13 @@ export async function checkBackendHealth(): Promise<HealthStatus> {
 export async function getSampleSignals(): Promise<SampleSignalItem[]> {
   try {
     const res = await fetchWithFallback("/signal/samples");
-    if (!res.ok) throw new Error(`Failed to list samples: ${res.statusText}`);
+
+    if (!res.ok) {
+      throw new Error(`Failed to list samples: ${res.statusText}`);
+    }
+
     const data: SampleListResponse = await res.json();
+
     return data.samples;
   } catch (err) {
     console.warn("Could not fetch samples from backend:", err);
@@ -117,20 +142,31 @@ export async function uploadAndAnalyzeSignal(
   samplesPerSymbol: number = 10
 ): Promise<AnalysisResponse> {
   const formData = new FormData();
+
   formData.append("file", file);
+
   if (sampleRate) {
     formData.append("sample_rate", sampleRate.toString());
   }
-  formData.append("samples_per_symbol", samplesPerSymbol.toString());
 
-  const res = await fetchWithFallback("/analysis/upload-and-analyze", {
-    method: "POST",
-    body: formData,
-  });
+  formData.append(
+    "samples_per_symbol",
+    samplesPerSymbol.toString()
+  );
+
+  const res = await fetchWithFallback(
+    "/analysis/upload-and-analyze",
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Analysis failed (${res.status}): ${errText}`);
+    throw new Error(
+      `Analysis failed (${res.status}): ${errText}`
+    );
   }
 
   return await res.json();
@@ -145,20 +181,35 @@ export async function analyzeDatasetSample(
   samplesPerSymbol: number = 10
 ): Promise<AnalysisResponse> {
   const formData = new FormData();
-  formData.append("sample_id", sampleId);
-  if (sampleRate) {
-    formData.append("sample_rate", sampleRate.toString());
-  }
-  formData.append("samples_per_symbol", samplesPerSymbol.toString());
 
-  const res = await fetchWithFallback("/analysis/sample", {
-    method: "POST",
-    body: formData,
-  });
+  formData.append("sample_id", sampleId);
+
+  if (sampleRate) {
+    formData.append(
+      "sample_rate",
+      sampleRate.toString()
+    );
+  }
+
+  formData.append(
+    "samples_per_symbol",
+    samplesPerSymbol.toString()
+  );
+
+  const res = await fetchWithFallback(
+    "/analysis/sample",
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Sample analysis failed (${res.status}): ${errText}`);
+
+    throw new Error(
+      `Sample analysis failed (${res.status}): ${errText}`
+    );
   }
 
   return await res.json();
