@@ -36,6 +36,12 @@ export interface AnalysisResponse {
   features: FeatureItem[];
   explanation: string;
 
+  // ---- Recovered Bits & Decoded Data ----
+  recoveredBitCount?: number;
+  convertedData?: string | null;
+  dataEncoding?: string;
+  dataConversionValid?: boolean;
+
   // ---- Real signal visualization data ----
   waveformSamples: number[];
   waveformTime?: number[];

@@ -1,9 +1,12 @@
 import { SignalTrace } from "./SignalTrace";
 import { MagneticLink } from "./Chrome";
+import { useAppNavigation } from "@/lib/navigation";
 
 const tags = ["WAV", "IQ", "DSP", "AI insights"];
 
 export function Hero() {
+  const { navigateToAnalyze, navigateToHowItWorks } = useAppNavigation();
+
   return (
     <section id="top" className="relative flex min-h-[100svh] items-center pt-16">
       <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2">
@@ -37,8 +40,14 @@ export function Hero() {
             </p>
 
             <div className="mt-12 flex flex-col items-start gap-6 sm:flex-row sm:items-center">
-              <MagneticLink href="/analyze">Analyze a signal</MagneticLink>
-              <MagneticLink href="#how-it-works" variant="ghost">
+              <MagneticLink href="/analyze" onClick={navigateToAnalyze}>
+                Analyze a signal
+              </MagneticLink>
+              <MagneticLink
+                href="/#how-it-works"
+                variant="ghost"
+                onClick={navigateToHowItWorks}
+              >
                 How it works
               </MagneticLink>
             </div>

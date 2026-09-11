@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ThemeProvider } from "@/lib/theme";
-import { Header } from "@/components/si/Chrome";
+import { Header, Footer } from "@/components/si/Chrome";
 import { FileUploader } from "@/components/FileUploader";
 import { FileInfoCard } from "@/components/FileInfoCard";
 import { setAnalysisFile, setAnalysisSample } from "@/lib/analysisStore";
@@ -225,6 +225,7 @@ export function UploadPage() {
             </p>
           )}
         </main>
+        <Footer />
       </div>
     </ThemeProvider>
   );

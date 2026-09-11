@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ThemeProvider } from "@/lib/theme";
-import { Header } from "@/components/si/Chrome";
+import { Header, Footer } from "@/components/si/Chrome";
 import { ClassificationCard } from "@/components/ClassificationCard";
 import { SignalMetrics } from "@/components/SignalMetrics";
 import { SignalWaveform } from "@/components/SignalWaveform";
@@ -64,6 +64,28 @@ export function ResultsPage() {
       value: formatCount(data.numSamples),
       unit: "",
     },
+    ...(typeof data.recoveredBitCount === "number"
+      ? [
+        {
+          label: "Recovered Bits",
+          value: `${formatCount(data.recoveredBitCount)} bits`,
+          unit: "",
+        },
+        {
+          label: "Encoding",
+          value: data.dataEncoding || "ASCII",
+          unit: "",
+        },
+        {
+          label: "Data Conversion",
+          value:
+            data.dataConversionValid && data.convertedData
+              ? String(data.convertedData)
+              : "Conversion Done",
+          unit: "",
+        },
+      ]
+      : []),
   ];
 
   return (
@@ -85,11 +107,10 @@ export function ResultsPage() {
               {/* Status badge */}
               <div className="shrink-0">
                 <span
-                  className={`inline-block border px-4 py-2 font-mono text-[0.65rem] tracking-[0.14em] ${
-                    isLive
+                  className={`inline-block border px-4 py-2 font-mono text-[0.65rem] tracking-[0.14em] ${isLive
                       ? "border-green-500/40 text-green-400 bg-green-500/10"
                       : "border-dashed border-border-strong text-muted-foreground"
-                  }`}
+                    }`}
                 >
                   {isLive
                     ? "LIVE ENGINE ANALYSIS · CONFIRMED"
@@ -131,7 +152,7 @@ export function ResultsPage() {
           <div className="mt-6">
             <SignalWaveform
               samples={data.waveformSamples}
-              time={data.waveformTime}
+              {...(data.waveformTime ? { time: data.waveformTime } : {})}
               isDemoData={!isLive}
             />
           </div>
@@ -140,14 +161,14 @@ export function ResultsPage() {
           <div className="mt-6 grid gap-6 md:grid-cols-2">
             <FrequencySpectrum
               bins={data.spectrumBins}
-              frequencies={data.spectrumFrequencies}
+              {...(data.spectrumFrequencies ? { frequencies: data.spectrumFrequencies } : {})}
               isDemoData={!isLive}
             />
 
             <Spectrogram
               rows={data.spectrogramRows}
-              times={data.spectrogramTimes}
-              frequencies={data.spectrogramFrequencies}
+              {...(data.spectrogramTimes ? { times: data.spectrogramTimes } : {})}
+              {...(data.spectrogramFrequencies ? { frequencies: data.spectrogramFrequencies } : {})}
               isDemoData={!isLive}
             />
           </div>
@@ -195,6 +216,7 @@ export function ResultsPage() {
             </button>
           </div>
         </main>
+        <Footer />
       </div>
     </ThemeProvider>
   );

@@ -30,7 +30,7 @@ export function SignalMetrics({ metrics, isDemoData = true }: SignalMetricsProps
             className="flex items-center justify-between px-6 py-3.5"
           >
             <dt className="text-[0.8rem] text-muted-foreground">{m.label}</dt>
-            <dd className="font-mono text-[0.8rem] text-foreground">
+            <dd className="font-mono text-[0.8rem] text-foreground text-right max-w-[260px] break-words">
               {m.value}
               {m.unit && (
                 <span className="ml-1 text-[0.72rem] text-muted-foreground">

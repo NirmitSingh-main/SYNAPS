@@ -37,6 +37,12 @@ export interface DemoAnalysis {
 
   explanation: string;
 
+  // ---- Recovered Bits & Decoded Data ----
+  recoveredBitCount?: number;
+  convertedData?: string | null;
+  dataEncoding?: string;
+  dataConversionValid?: boolean;
+
   // ---- Visualization data ----
   waveformSamples: number[];
   waveformTime?: number[];
@@ -71,6 +77,12 @@ export const demoAnalysis: DemoAnalysis = {
   snr: 17.4,
   peakFrequency: 6100,
   numSamples: 8192,
+
+  // ---- Recovered Bits & Data Conversion ----
+  recoveredBitCount: 800,
+  convertedData: null,
+  dataEncoding: "ASCII",
+  dataConversionValid: false,
 
   // ---- Prediction breakdown ----
   predictionBreakdown: [
