@@ -996,6 +996,12 @@ class AnalysisPipeline:
             "features": features_list,
             "explanation": explanation,
 
+            # Recovered Bits -> Data Conversion
+            "recoveredBitCount": int(len(recovered_bits)),
+            "convertedData": decoded_text,
+            "dataEncoding": "ASCII",
+            "dataConversionValid": decoded_text is not None,
+
             # Existing visualization fields
             "waveformSamples": waveform_samples,
             "spectrumBins": spectrum_bins,
