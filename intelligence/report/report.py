@@ -22,6 +22,9 @@ def generate_intelligence_report(
     decision_info = analysis_result.get("decision", {})
     fingerprint_info = analysis_result.get("fingerprint", {})
     evidence_info = analysis_result.get("evidence", {})
+    bit_rec_info = analysis_result.get("bit_recovery", {})
+    comp_results = analysis_result.get("component_results", [])
+    signal_type = analysis_result.get("signal_type", "SINGLE")
 
     report = {
         "report_title": "SYNAPS SIGNAL INTELLIGENCE REPORT",
@@ -30,6 +33,7 @@ def generate_intelligence_report(
         "format": input_info.get("format"),
         "sample_count": input_info.get("sample_count", 0),
         "sample_rate_hz": input_info.get("sample_rate_hz", 1_000_000.0),
+        "signal_type": signal_type,
         
         "modulation_decision": {
             "final_modulation": decision_info.get("final_modulation", ai_info.get("predicted_class", "UNKNOWN")),
@@ -37,6 +41,7 @@ def generate_intelligence_report(
             "confidence_pct": ai_info.get("confidence", 0.0),
             "detection_status": ai_info.get("status", "KNOWN"),
             "probabilities": ai_info.get("probabilities", {}),
+            "detected_components": analysis_result.get("detected_components", []),
         },
 
         "dsp_metrics": {
@@ -52,8 +57,13 @@ def generate_intelligence_report(
             "recovered_symbols": demod_info.get("symbol_count", 0),
             "recovered_bits": demod_info.get("bit_count", 0),
             "decoded_message": decode_info.get("decoded_message"),
+            "decoding_status": decode_info.get("decoding_status", "RAW_BITSTREAM_UNSTRUCTURED"),
+            "fec_status": decode_info.get("fec_status", "NOT_CONFIGURED"),
             "payload_entropy": decode_info.get("entropy", 0.0),
         },
+
+        "bit_recovery": bit_rec_info,
+        "component_results": comp_results,
 
         "emitter_fingerprint": fingerprint_info,
         "evidence_summary": {
@@ -69,6 +79,10 @@ def format_text_report(report: Dict[str, Any]) -> str:
     """
     Format structured report into a clean, human-readable text document.
     """
+    signal_type = report.get("signal_type", "SINGLE")
+    mod_decision = report.get("modulation_decision", {})
+    detected_comps = mod_decision.get("detected_components", [])
+
     lines = [
         "=" * 60,
         "               SYNAPS SIGNAL INTELLIGENCE REPORT",
@@ -76,22 +90,29 @@ def format_text_report(report: Dict[str, Any]) -> str:
         f"Signal ID       : {report.get('signal_id')}",
         f"Source File     : {report.get('source_file')}",
         f"Format          : {report.get('format')}",
+        f"Signal Type     : {signal_type}",
         f"Sample Count    : {report.get('sample_count')} samples",
         f"Sampling Rate   : {report.get('sample_rate_hz'):,.0f} Hz",
         "",
         "MODULATION CLASSIFICATION & DECISION",
         "-" * 40,
-        f"Predicted Class : {report['modulation_decision']['final_modulation']}",
-        f"Confidence      : {report['modulation_decision']['confidence_pct']:.2f}%",
-        f"Status          : {report['modulation_decision']['detection_status']} ({report['modulation_decision']['decision_status']})",
-        "",
-        "Class Probabilities:",
+        f"Final Decision  : {mod_decision.get('final_modulation')}",
+        f"Confidence      : {mod_decision.get('confidence_pct', 0.0):.2f}%",
+        f"Status          : {mod_decision.get('detection_status', 'KNOWN')} ({mod_decision.get('decision_status', 'CONFIRMED')})",
     ]
 
-    for mod, prob in report["modulation_decision"]["probabilities"].items():
+    if detected_comps:
+        lines.append(f"Detected Comps  : {', '.join(detected_comps)}")
+
+    lines.extend([
+        "",
+        "Class Probabilities:",
+    ])
+
+    for mod, prob in mod_decision.get("probabilities", {}).items():
         lines.append(f"  - {mod:<8}: {prob:.2f}%")
 
-    dsp = report["dsp_metrics"]
+    dsp = report.get("dsp_metrics", {})
     lines.extend([
         "",
         "DSP PHYSICAL ESTIMATES",
@@ -100,11 +121,47 @@ def format_text_report(report: Dict[str, Any]) -> str:
         f"CFO             : {dsp.get('carrier_frequency_offset_hz', 0.0):.2f} Hz",
         f"Occupied BW (99%): {dsp.get('occupied_bandwidth_hz', 0.0):,.0f} Hz",
         f"Symbol Rate     : {dsp.get('symbol_rate', 0.0):,.0f} Baud",
+    ])
+
+    recovered_bits_count = report['recovery_pipeline'].get('recovered_bits', 0)
+    recovered_bits_display = "—" if signal_type == "MIXED" else str(recovered_bits_count)
+
+    lines.extend([
         "",
         "SIGNAL RECOVERY & DECODING",
         "-" * 40,
-        f"Recovered Bits  : {report['recovery_pipeline']['recovered_bits']}",
-        f"Decoded Message : {repr(report['recovery_pipeline']['decoded_message']) if report['recovery_pipeline']['decoded_message'] else 'None'}",
+        f"Recovered Bits  : {recovered_bits_display}",
+        f"Decoded Message : {repr(report['recovery_pipeline'].get('decoded_message')) if report['recovery_pipeline'].get('decoded_message') else 'None'}",
+    ])
+
+    bit_rec = report.get("bit_recovery", {})
+    if bit_rec:
+        lines.extend([
+            "",
+            "BIT RECOVERY VALIDATION",
+            "-" * 40,
+            f"Status          : {bit_rec.get('validation_status', 'N/A')}",
+        ])
+        if bit_rec.get("validation_status") in ("COMPONENT_RECOVERY_NOT_VALIDATED", "Component bit recovery not validated"):
+            lines.append(f"Reference Bits  : —")
+            lines.append(f"Recovered Bits  : —")
+            lines.append(f"Bit Accuracy    : —")
+            lines.append(f"BER             : —")
+        elif bit_rec.get("reference_bit_count") is not None:
+            lines.append(f"Reference Bits  : {bit_rec.get('reference_bit_count')}")
+            lines.append(f"Recovered Bits  : {bit_rec.get('recovered_bit_count')}")
+            lines.append(f"Matched Bits    : {bit_rec.get('matched_bit_count')}")
+            lines.append(f"Bit Accuracy    : {bit_rec.get('bit_accuracy_pct', 0.0):.2f}%")
+            lines.append(f"Bit Error Rate  : {bit_rec.get('ber', 0.0):.4f}")
+        else:
+            # UNVALIDATED_NO_METADATA or NO_RECOVERED_BITS
+            lines.append(f"Reference Bits  : —")
+            rec_count = bit_rec.get('recovered_bit_count')
+            lines.append(f"Recovered Bits  : {rec_count if rec_count is not None else '—'}")
+            lines.append(f"Bit Accuracy    : —")
+            lines.append(f"BER             : —")
+
+    lines.extend([
         "",
         "EMITTER FINGERPRINT",
         "-" * 40,

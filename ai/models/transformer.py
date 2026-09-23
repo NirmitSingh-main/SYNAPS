@@ -11,8 +11,8 @@ class SignalTransformer(nn.Module):
            (batch_size, sequence_length, input_features)
 
     Example:
-        input_features = 4
-        sequence_length = 2000
+        input_features = 6
+        sequence_length = 256
 
     Output:
         logits of shape
@@ -21,8 +21,8 @@ class SignalTransformer(nn.Module):
 
     def __init__(
         self,
-        input_features=4,
-        num_classes=4,
+        input_features=6,
+        num_classes=5,
         d_model=64,
         nhead=4,
         num_layers=2,

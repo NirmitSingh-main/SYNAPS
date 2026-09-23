@@ -1,21 +1,28 @@
 interface ClassificationCardProps {
   classification: string;
   confidence: number;
-  isDemoData?: boolean;
+  isDemoData?: boolean | undefined;
+  signalType?: string | undefined;
+  detectedComponents?: string[] | undefined;
 }
 
 export function ClassificationCard({
   classification,
   confidence,
   isDemoData = true,
+  signalType,
+  detectedComponents,
 }: ClassificationCardProps) {
   const pct = Math.round(confidence * 100);
+  const isMixed = classification === "MIXED" || signalType === "MIXED";
 
   return (
     <div className="border border-border bg-background">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <p className="label-mono">Signal classification</p>
+        <p className="label-mono">
+          {isMixed ? "Signal classification · Multi-carrier" : "Signal classification"}
+        </p>
         {isDemoData && (
           <span className="font-mono text-[0.65rem] tracking-[0.14em] text-muted-foreground">
             ILLUSTRATIVE
@@ -25,11 +32,17 @@ export function ClassificationCard({
 
       {/* Classification result */}
       <div className="px-6 py-6">
-        <p
-          className="border border-dashed border-border-strong px-5 py-4 text-[1.05rem] text-foreground"
-        >
-          {classification}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 border border-dashed border-border-strong px-5 py-4">
+          <p className="text-[1.05rem] font-medium text-foreground">
+            {classification}
+          </p>
+          {isMixed && detectedComponents && detectedComponents.length > 0 && (
+            <div className="flex items-center gap-1.5 font-mono text-[0.72rem] text-signal">
+              <span className="text-muted-foreground">Comps:</span>
+              <span>{detectedComponents.join(" + ")}</span>
+            </div>
+          )}
+        </div>
 
         <div className="rule-line mt-6" />
 

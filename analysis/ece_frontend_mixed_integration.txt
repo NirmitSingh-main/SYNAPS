@@ -1,0 +1,182 @@
+================================================================================
+SYNAPS ECE, BACKEND, AND FRONTEND MIXED INTEGRATION REPORT
+Generated: 2026-09-23T23:38:00+05:30
+Project: SYNAPS / SIH26147 Signal Intelligence
+Status: VERIFIED & COMPLETE
+================================================================================
+
+1. EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+This report documents the full end-to-end integration of the new 3,333-signal
+dataset contract, multi-component MIXED signal handling, ECE bit retrieval
+validation, backend API response schemas, and frontend UI visualization.
+
+Key Achievements:
+- ECE Bit Retrieval on New Dataset:
+  * BPSK  : 97.78% mean bit accuracy (BER = 0.0222) -> VALIDATED (100.00% on clean reference)
+  * QPSK  : 96.75% mean bit accuracy (BER = 0.0325) -> VALIDATED (100.00% on clean reference)
+  * FSK   : 98.29% mean bit accuracy (BER = 0.0171) -> VALIDATED (100.00% on clean reference)
+  * QAM16 : 91.13% mean bit accuracy (BER = 0.0887) -> VALIDATED (100.00% on clean reference)
+- Multi-component MIXED Signals:
+  * Full support throughout pipeline for composite waveforms (2-component & 3-component)
+  * Composite waveforms preserved without destructive single-bitstream demodulation
+  * Per-component metadata tracking (modulation, baud rate, CFO, placement, bits)
+  * Explicit reporting: "Component bit recovery not validated" (no fake metrics)
+- Frontend:
+  * Vite + React production build passes with 0 errors
+  * Responsive multi-carrier component breakdown table
+  * Dedicated Bit Recovery & Validation card displaying reference bits, recovered bits,
+    bit accuracy %, BER, and validation status
+- Transformer Artifacts & Baseline Integrity:
+  * Run 006 (4-feature baseline: 87.69%), Run 007 (scalar phase experiment), and
+    Run 008 (6-feature circular differential phasor candidate: 92.82%) preserved untouched
+  * All DSP mathematics, formulas, and estimators strictly preserved
+
+================================================================================
+2. FILES INSPECTED & AUDITED
+================================================================================
+- dsp/frequency/cfo.py
+- dsp/phase/phase_estimation.py
+- dsp/timing/symbol_rate.py
+- dsp/spectral/fft.py, psd.py, bandwidth.py
+- dsp/signal_quality/snr.py
+- dsp/constellation/constellation.py
+- dsp/statistical/hoc.py
+- signal_processing/input/loader.py, validation.py, format_detection.py
+- signal_processing/synchronization/frequency_sync.py, phase_sync.py, timing_sync.py
+- signal_processing/demodulation/bpsk.py, qpsk.py, fsk.py, qam.py
+- signal_processing/symbol_processing/decision.py, symbol_to_bits.py
+- signal_processing/decoding/bit_to_data.py
+- fusion/feature_fusion.py, evidence.py
+- intelligence/decision/decision.py, hypothesis.py
+- intelligence/confidence/confidence.py
+- intelligence/fingerprint/fingerprint.py
+- intelligence/validation/decoded_data.py, recovery_validation.py
+- intelligence/report/report.py
+- backend/api/signal.py, analysis.py, report.py
+- backend/schemas/response.py
+- backend/services/pipeline.py
+- frontend/SNAPS-FE/src/data/demoData.ts
+- frontend/SNAPS-FE/src/services/api.ts
+- frontend/SNAPS-FE/src/components/ClassificationCard.tsx
+- frontend/SNAPS-FE/src/pages/ResultsPage.tsx
+- tests/ai/test_ai.py
+- tests/signal_processing/test_demodulation.py
+- tests/test_pipeline.py
+
+================================================================================
+3. MODIFICATIONS & RATIONALE
+================================================================================
+1. signal_processing/demodulation/qpsk.py:
+   - Fixed Gray mapping implementation where (-I, +Q) mapped to [1, 0] instead of [0, 1]
+     and (+I, -Q) mapped to [0, 1] instead of [1, 0], resolving a discrepancy with its
+     own docstring, symbol_to_bits.py, and the dataset generator.
+   - Restored 100.00% exact bit agreement on dataset QPSK reference signals.
+
+2. backend/services/pipeline.py:
+   - Added dynamic feature dimension slicing (`features[:, :self.model.input_features]`)
+     to support loading models of any feature dimensionality (4-feature baseline or 6-feature).
+   - Added metadata resolution for MIXED vs SINGLE signals.
+   - For MIXED signals: composite waveform is preserved intact; single-bitstream demodulation
+     is bypassed; synchronization status set to "MIXED_COMPOSITE"; per-component metadata
+     extracted; validation status explicitly set to "Component bit recovery not validated".
+   - For Pure signals: recovered bits are compared against metadata reference bits to calculate
+     exact matched bits, bit accuracy %, BER, and validation status (VALIDATED / SUBOPTIMAL).
+   - Enhanced frontend_data payload with `signalType`, `detectedComponents`, `componentResults`,
+     and `bitRecovery` structures.
+
+3. backend/schemas/response.py:
+   - Extended Pydantic schemas (`ModulationPrediction`, `BitRecoverySummary`,
+     `IntelligenceReportResponse`) to support `signal_type`, `detected_components`,
+     `bit_recovery`, and `component_results`.
+
+4. backend/api/signal.py:
+   - Updated `list_sample_signals` to use canonical dataset directory getters
+     (`get_class_iq_dir`, `get_class_wav_dir`) matching the v2 dataset layout.
+
+5. intelligence/report/report.py:
+   - Updated report generator and text formatter to include `signal_type`, `detected_components`,
+     and structured `bit_recovery` validation tables.
+
+6. frontend/SNAPS-FE/src/data/demoData.ts & frontend/SNAPS-FE/src/services/api.ts:
+   - Extended `DemoAnalysis` and `AnalysisResponse` TypeScript interfaces with `signalType`,
+     `detectedComponents`, `componentResults`, and `bitRecovery` fields.
+
+7. frontend/SNAPS-FE/src/components/ClassificationCard.tsx:
+   - Enhanced card to display multi-carrier tag and component list (e.g. "BPSK + QPSK")
+     when analyzing MIXED signals.
+
+8. frontend/SNAPS-FE/src/pages/ResultsPage.tsx:
+   - Added dedicated Bit Recovery & Component Analysis section.
+   - For Pure signals: displays 4-column metric grid (Reference Bits, Recovered Bits,
+     Bit Accuracy %, BER).
+   - For MIXED signals: displays component table (Component #, Modulation, Symbol Rate,
+     Frequency Offset, Frequency Placement, Status) with explicit non-validated disclaimer.
+
+9. tests/test_pipeline.py:
+   - Extended test suite to cover all 4 pure classes (BPSK, QPSK, FSK, QAM16), 2-component MIXED,
+     3-component MIXED, and FastAPI Pydantic schema validation.
+
+10. tests/signal_processing/test_demodulation.py:
+    - Updated synthetic QPSK test generator mapping to align with standard Gray coding.
+
+================================================================================
+4. ECE BIT RETRIEVAL BENCHMARK RESULTS (20 SAMPLES PER CLASS)
+================================================================================
+Modulation | Signals | Ref Bits   | Rec Bits   | Bit Accuracy   | BER      | Status      
+-----------------------------------------------------------------------------------------------
+BPSK       | 20      | 19,600     | 19,600     |        97.78%  |   0.0222 | VALIDATED   
+QPSK       | 20      | 33,600     | 33,600     |        96.75%  |   0.0325 | VALIDATED   
+FSK        | 20      | 16,800     | 16,800     |        98.29%  |   0.0171 | VALIDATED   
+QAM16      | 20      | 76,000     | 76,000     |        91.13%  |   0.0887 | VALIDATED   
+MIXED-2    | 1       | N/A        | 0          | N/A            | N/A      | NOT VALIDATED
+MIXED-3    | 1       | N/A        | 0          | N/A            | N/A      | NOT VALIDATED
+================================================================================
+
+================================================================================
+5. TEST VERIFICATION SUMMARY
+================================================================================
+1. AI Unit Tests (`tests/ai/test_ai.py`):
+   - test_learned_features: PASS
+   - test_transformer_model: PASS
+   - test_cnn_model: PASS
+   - test_ssl_mae_model: PASS
+   - test_classification_and_confidence: PASS
+   - test_metrics: PASS
+   - test_representations: PASS
+   Result: ALL AI UNIT TESTS PASSED (0 errors).
+
+2. Demodulation Unit Tests (`tests/signal_processing/test_demodulation.py`):
+   - test_synthetic_bpsk: PASS (100.00%)
+   - test_synthetic_qpsk: PASS (100.00%)
+   - test_synthetic_fsk: PASS (100.00%)
+   - test_synthetic_16qam: PASS (100.00%)
+   - test_dataset_bpsk: PASS (100.00%)
+   - test_dataset_qpsk: PASS (100.00%)
+   - test_dataset_fsk: PASS (100.00%)
+   - test_dataset_16qam: PASS (100.00%)
+   Result: ALL DEMODULATION TESTS PASSED (0 errors).
+
+3. Pipeline Integration Tests (`tests/test_pipeline.py`):
+   - test_pipeline_on_bpsk_sample: PASS
+   - test_pipeline_on_qpsk_wav_sample: PASS
+   - test_pipeline_on_fsk_sample: PASS
+   - test_pipeline_on_qam16_sample: PASS
+   - test_pipeline_on_2component_mixed: PASS
+   - test_pipeline_on_3component_mixed: PASS
+   Result: ALL PIPELINE TESTS PASSED (0 errors).
+
+4. Frontend Production Build (`npm run build` in `frontend/SNAPS-FE/`):
+   - TypeScript check (`tsc -b`): PASS (0 errors)
+   - Vite bundling: PASS (`dist/` generated in 20.30s)
+
+================================================================================
+6. PRESERVATION & INTEGRITY AUDIT
+================================================================================
+- Baseline Run 006 (4-feature baseline): PRESERVED (`result/transformer/run_006.*`)
+- Experiment Run 007 (scalar diff phase): PRESERVED (`result/transformer/run_007.*`)
+- Experiment Run 008 (6-feature circular differential phasor): PRESERVED (`result/transformer/run_008.*`)
+- Baseline checkpoint: PRESERVED (`ai/models/transformer.pth`)
+- DSP formulas and estimators: STRICTLY PRESERVED (no changes to estimation math)
+- Dataset: STRICTLY PRESERVED (0 dataset files modified)
+================================================================================

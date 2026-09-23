@@ -37,11 +37,40 @@ export interface DemoAnalysis {
 
   explanation: string;
 
+  signalType?: string;
+  detectedComponents?: string[];
+  componentResults?: {
+    componentIndex: number;
+    modulation: string;
+    symbolRate?: number;
+    frequencyOffset?: number;
+    frequencyPlacement?: number;
+    powerScale?: number;
+    bitCount?: number;
+    status: string;
+  }[];
+
   // ---- Recovered Bits & Decoded Data ----
-  recoveredBitCount?: number;
+  recoveredBitCount?: number | null;
   convertedData?: string | null;
+  decodingStatus?: string | null;
+  fecStatus?: string | null;
   dataEncoding?: string;
   dataConversionValid?: boolean;
+  bitRecovery?: {
+    validation_status: string;
+    reference_bit_count?: number | null;
+    recovered_bit_count?: number | null;
+    matched_bit_count?: number | null;
+    bit_accuracy_pct?: number | null;
+    ber?: number | null;
+    component_recovery?: {
+      component_index: number;
+      modulation: string;
+      status: string;
+      num_bits?: number;
+    }[];
+  };
 
   // ---- Visualization data ----
   waveformSamples: number[];

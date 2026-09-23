@@ -34,7 +34,7 @@ def calculate_accuracy(
 def calculate_confusion_matrix(
     predictions: Union[np.ndarray, torch.Tensor],
     targets: Union[np.ndarray, torch.Tensor],
-    num_classes: int = 4,
+    num_classes: int = 5,
 ) -> np.ndarray:
     """
     Calculate confusion matrix of shape (num_classes, num_classes).

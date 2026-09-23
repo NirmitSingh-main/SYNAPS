@@ -3,6 +3,7 @@ CLASS_NAMES = [
     "QPSK",
     "FSK",
     "QAM16",
+    "MIXED",
 ]
 
 

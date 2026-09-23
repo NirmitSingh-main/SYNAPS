@@ -22,12 +22,12 @@ def demodulate_qpsk(symbols):
             bits.extend([0, 0])
 
         elif symbol.real < 0 and symbol.imag >= 0:
-            bits.extend([1, 0])
+            bits.extend([0, 1])
 
         elif symbol.real < 0 and symbol.imag < 0:
             bits.extend([1, 1])
 
         else:
-            bits.extend([0, 1])
+            bits.extend([1, 0])
 
     return np.array(bits, dtype=np.uint8)

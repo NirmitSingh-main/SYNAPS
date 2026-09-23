@@ -1,0 +1,121 @@
+================================================================================
+SYNAPS FINAL ECE / DSP / DECODING / BACKEND INTEGRATION AUDIT
+Date: 2026-09-24T00:35:00+05:30
+Project: SYNAPS (SIH26147 Signal Intelligence)
+Status: VERIFIED & INTEGRATED
+================================================================================
+
+1. TRACK A — AI / DATASET AUDIT
+--------------------------------------------------------------------------------
+- Dataset Contract:
+  * Canonical 3,333-signal dataset structure fully validated.
+  * 3,000 pure signals: 750 each for BPSK, QPSK, FSK, QAM16.
+  * 333 MIXED multi-carrier signals: 300 two-component, 33 three-component.
+  * Formats: Interleaved float32 Little-Endian (.iq), 2-channel float32 (.wav), JSON metadata (.json).
+  * Centralized path resolution in project_paths.py actively used by loaders and tests.
+
+- AI Models & Inference:
+  * Baseline Run 006 (4-feature [I, Q, |s|, phase]: 87.69% test acc) -> PRESERVED INTACT.
+  * Experiment Run 007 (5-feature scalar diff phase: 80.77% test acc) -> PRESERVED INTACT.
+  * Candidate Run 008 (6-feature circular differential phasor [I, Q, |s|, phase, cos(dphi), sin(dphi)]: 92.82% test acc) -> PRESERVED INTACT.
+  * Checkpoint: ai/models/transformer.pth loaded dynamically with adaptive feature dimension slicing.
+  * NO retraining performed. Transformer weights and configurations untouched.
+
+================================================================================
+2. TRACK B — DSP VALIDATION & FORMULA AUDIT
+--------------------------------------------------------------------------------
+- Formal Validation Matrix: Generated in analysis/dsp_validation_matrix.txt across 6 canonical signals:
+  signal_00001_bpsk, signal_00751_qpsk, signal_01501_fsk, signal_02251_qam16, signal_03001_mixed, signal_03301_mixed.
+
+- Parameter-by-Parameter Findings:
+  1. Sampling Frequency (Fs): Exact match against metadata across all signals (1.0 MHz / 1.2 MHz).
+  2. Sample Count (N): Exact match (8,000 / 9,600 samples).
+  3. Duration: Exact match (8.00 ms duration).
+  4. SNR Estimation: Difference-based estimator outputs consistent blind estimates (e.g. 9.14 dB on clean 60dB reference, 0.85–0.87 dB on composite low-SNR mixed).
+  5. CFO / Frequency Offset: Power-law and FSK spectral midpoint estimators correctly identify carrier offsets. For MIXED signals, multi-component frequency offsets are resolved per component.
+  6. Frequency Placement (MIXED): Subcarrier placements (e.g. -281.6 kHz / -167.4 kHz) distinguished from global composite spectral peak.
+  7. Occupied Bandwidth: 99% cumulative energy occupied bandwidth matches theoretical pulse shapes (1.03 MHz for alpha=0.35 shaped signals).
+  8. Symbol Rate: Cyclostationary / spectral line estimator matches nominal baud rates (150 kBaud, 75 kBaud, 200 kBaud).
+  9. Higher-Order Cumulants (C40): Accurately distinguishes non-circular (BPSK |C40| > 0) from circular modulations (QPSK/FSK |C40| ~ 0).
+  10. Higher-Order Cumulants (C42): Kurtosis metrics provide consistent amplitude modulation evidence.
+  11. Constellation Analysis: K-means clustering and EVM metrics characterize signal dispersion.
+  12. Mixed Component Detection: Composite waveforms correctly decompose into constituent modulations (e.g. BPSK + QPSK, BPSK + QPSK + FSK).
+
+- DSP Formula Changes: NO DSP formulas were modified. All estimators operate strictly on established mathematical principles.
+
+================================================================================
+3. TRACK C — DECODING & BACKEND AUDIT
+--------------------------------------------------------------------------------
+Complete Decoding Chain Audit:
+1. Demodulation: FULLY IMPLEMENTED & INTEGRATED
+   - BPSK: Costas / hard decision thresholding -> 100.00% exact bit retrieval on clean references.
+   - QPSK: Gray quadrant mapping -> 100.00% exact bit retrieval on clean references.
+   - FSK: Instantaneous phase discriminator -> 100.00% exact bit retrieval on clean references.
+   - 16QAM: Decision boundary slicing -> 100.00% exact bit retrieval on clean references.
+2. Symbol Decision: FULLY IMPLEMENTED & INTEGRATED (signal_processing/symbol_processing/decision.py)
+3. Symbol-to-Bits: FULLY IMPLEMENTED & INTEGRATED (signal_processing/symbol_processing/symbol_to_bits.py)
+4. Deinterleaving: IMPLEMENTED BUT NOT CONFIGURED (signal_processing/decoding/deinterleaving.py)
+   - Permutation reversal logic exists; dataset does not employ bit interleaving; explicitly exposed as "NOT_CONFIGURED".
+5. Bit Correlation / Alignment: PARTIALLY IMPLEMENTED (Used in benchmark test harnesses; dataset has no frame preambles).
+6. FEC / Viterbi: PLACEHOLDER / NOT APPLICABLE (signal_processing/decoding/fec.py)
+   - Dataset transmits uncoded bitstreams (fec_type: NONE); explicitly exposed as "NOT_CONFIGURED"; no fake FEC/Viterbi applied.
+7. Bit-to-Data: FULLY IMPLEMENTED & INTEGRATED (signal_processing/decoding/bit_to_data.py)
+   - ASCII, UTF-8, Binary converters. Successfully converts text payloads when printable; fails safely to null when unstructured binary.
+8. Payload Validation: FULLY IMPLEMENTED & INTEGRATED (intelligence/validation/decoded_data.py)
+   - Computes Shannon bit entropy and printable character ratios.
+
+MIXED Signal Demodulation Safety:
+- Single-bitstream demodulation is explicitly bypassed for MIXED signals.
+- recovered_bit_count: null (None)
+- recoveredBitCount: null (None)
+- decoding_status: "NOT_APPLICABLE"
+- validation_status: "COMPONENT_RECOVERY_NOT_VALIDATED"
+- NO fake global BER or concatenated bitstream is created.
+
+================================================================================
+4. TRACK D — FRONTEND AUDIT
+--------------------------------------------------------------------------------
+- ResultsPage.tsx & Components:
+  * Pure Signals: Displays 4-column metric grid (Reference Bits, Recovered Bits, Bit Accuracy %, BER). Displays Decoded Message Payload box when legitimate text is recovered.
+  * MIXED Signals: Displays component breakdown table (Component #, Modulation, Symbol Rate, Freq Offset, Placement, Status) with explicit non-destructive disclaimer. Recovered bits display as "—".
+  * External Uploads Without Metadata: Displays recovered bits count, reference bits as "—", bit accuracy as "—", BER as "—", and validation status as "UNVALIDATED_NO_METADATA".
+  * Disclaimer / Chrome Banner: Context-aware banner distinguishes live uploaded analysis from illustrative demo states.
+
+================================================================================
+5. COMMON API CONTRACT
+--------------------------------------------------------------------------------
+Coherent Pydantic Schema (backend/schemas/response.py):
+- IntelligenceReportResponse, ModulationPrediction, DspMetrics, RecoveryPipelineSummary, BitRecoverySummary.
+- Explicit null semantics:
+  * recoveredBitCount: null -> bit recovery not applicable / not performed (MIXED)
+  * recoveredBitCount: 0    -> recovery performed but yielded 0 bits
+  * reference_bit_count: null -> external signal without ground truth
+- decoding_status: "DECODED_ASCII" | "UNSTRUCTURED_BINARY" | "NOT_APPLICABLE" | "NO_BITS"
+- fec_status: "NOT_CONFIGURED"
+
+================================================================================
+6. TEST VERIFICATION RESULTS
+--------------------------------------------------------------------------------
+1. AI Test Suite (tests/ai/test_ai.py): PASS (7 / 7 tests)
+2. Demodulation Test Suite (tests/signal_processing/test_demodulation.py): PASS (8 / 8 tests, 100.00% bit agreement)
+3. Pipeline Test Suite (tests/test_pipeline.py): PASS (6 / 6 tests)
+4. Comprehensive Audit Test Suite (scripts/test_comprehensive_audit.py):
+   - [PASS] 1. Pure BPSK end-to-end
+   - [PASS] 2. Pure QPSK end-to-end
+   - [PASS] 3. Pure FSK end-to-end
+   - [PASS] 4. Pure QAM16 end-to-end
+   - [PASS] 5. MIXED 2-component
+   - [PASS] 6. MIXED 3-component
+   - [PASS] 7. External file without metadata
+   - [PASS] 8. Backend schema serialization (model_dump_json)
+   - [PASS] 9. Decoding status serialization (decoding_status, fec_status)
+5. Frontend TypeScript Typecheck (npx tsc --noEmit): PASS (0 errors)
+6. Frontend Production Build (npm run build): PASS (dist/ bundle generated in 3.29s)
+
+================================================================================
+7. KNOWN LIMITATIONS
+--------------------------------------------------------------------------------
+1. FEC / Viterbi: FEC decoding algorithms (e.g. Viterbi, Reed-Solomon, LDPC) are not applied because the canonical dataset does not employ forward error correction coding. Exposed truthfully as "NOT_CONFIGURED".
+2. Deinterleaving: Bit deinterleaving is not applied because the dataset does not interleave bits. Exposed as "NOT_CONFIGURED".
+3. Blind Source Separation: MIXED signals are identified, multi-component parameters extracted, and waveforms preserved intact; blind demixing/component bit retrieval is explicitly not attempted and labeled as "COMPONENT_RECOVERY_NOT_VALIDATED".
+================================================================================

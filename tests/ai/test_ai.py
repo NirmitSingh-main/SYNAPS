@@ -28,16 +28,16 @@ from ai.representations.constellation import extract_constellation_tensor
 def test_learned_features():
     iq = np.array([1.0 + 2.0j, -0.5 + 0.5j, 0.0 + 1.0j], dtype=np.complex64)
     feats = prepare_iq_features(iq)
-    assert feats.shape == (3, 4), f"Expected shape (3, 4), got {feats.shape}"
+    assert feats.shape == (3, 6), f"Expected shape (3, 6), got {feats.shape}"
     assert np.all(np.isfinite(feats))
     print("[PASS] test_learned_features")
 
 
 def test_transformer_model():
-    model = SignalTransformer(input_features=4, num_classes=4, d_model=32, nhead=2, num_layers=1)
-    x = torch.randn(2, 100, 4)
+    model = SignalTransformer(input_features=6, num_classes=5, d_model=32, nhead=2, num_layers=1)
+    x = torch.randn(2, 100, 6)
     logits = model(x)
-    assert logits.shape == (2, 4), f"Expected (2, 4), got {logits.shape}"
+    assert logits.shape == (2, 5), f"Expected (2, 5), got {logits.shape}"
     print("[PASS] test_transformer_model")
 
 

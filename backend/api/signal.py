@@ -74,12 +74,12 @@ def list_sample_signals():
     """
     List preloaded dataset sample signals for quick testing in the UI.
     """
-    from project_paths import CLASS_NAMES, IQ_ROOT, WAV_ROOT
+    from project_paths import CLASS_NAMES, get_class_iq_dir, get_class_wav_dir
     samples_list = []
 
     for c in CLASS_NAMES:
-        iq_dir = IQ_ROOT / c
-        wav_dir = WAV_ROOT / c
+        iq_dir = get_class_iq_dir(c)
+        wav_dir = get_class_wav_dir(c)
 
         if iq_dir.exists():
             for f in sorted(list(iq_dir.glob("*.iq")))[:5]:

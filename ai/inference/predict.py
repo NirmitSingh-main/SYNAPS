@@ -8,11 +8,12 @@ from project_paths import (
     TRANSFORMER_CHECKPOINT,
     TRANSFORMER_RESULT_DIR,
     CLASS_NAMES,
+    NUM_CLASSES,
 )
 
 from ai.preprocessing.iq_loader import load_iq_file
 from ai.preprocessing.wav_loader import load_wav_file
-from ai.features.learned_features import prepare_iq_features
+from ai.features.learned_features import prepare_iq_features, tokenize_signal_features
 from ai.models.transformer import SignalTransformer
 
 from ai.classification.modulation import classify_modulation
@@ -27,7 +28,8 @@ from ai.classification.unknown_detection import (
 
 MODEL_PATH = TRANSFORMER_CHECKPOINT
 RESULT_DIR = TRANSFORMER_RESULT_DIR
-SEQUENCE_LENGTH = 1000
+NUM_TOKENS = 256
+SEQUENCE_LENGTH = NUM_TOKENS
 
 
 def load_model(model_path=None):
@@ -47,14 +49,30 @@ def load_model(model_path=None):
         "cuda" if torch.cuda.is_available() else "cpu"
     )
 
-    model = SignalTransformer()
-
-    model.load_state_dict(
-        torch.load(
-            target_path,
-            map_location=device
-        )
+    # Support both rich checkpoint and legacy state_dict
+    checkpoint = torch.load(
+        target_path,
+        map_location=device,
+        weights_only=False,
     )
+
+    in_features = 5
+    if isinstance(checkpoint, dict) and "input_features" in checkpoint:
+        in_features = checkpoint["input_features"]
+    elif isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        in_proj_w = checkpoint["model_state_dict"].get("input_projection.weight")
+        if in_proj_w is not None:
+            in_features = in_proj_w.shape[1]
+
+    model = SignalTransformer(
+        input_features=in_features,
+        num_classes=NUM_CLASSES,
+    )
+
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+    else:
+        model.load_state_dict(checkpoint)
 
     model.to(device)
     model.eval()
@@ -62,23 +80,11 @@ def load_model(model_path=None):
     return model, device
 
 
-def prepare_features(iq):
+def prepare_features(iq, num_tokens=NUM_TOKENS):
 
     features = prepare_iq_features(iq)
-
-    if len(features) >= SEQUENCE_LENGTH:
-        features = features[:SEQUENCE_LENGTH]
-
-    else:
-        padded = np.zeros(
-            (SEQUENCE_LENGTH, 4),
-            dtype=np.float32
-        )
-
-        padded[:len(features)] = features
-        features = padded
-
-    return features.astype(np.float32)
+    tokens = tokenize_signal_features(features, num_tokens=num_tokens)
+    return tokens.astype(np.float32)
 
 
 def load_input(filepath):
@@ -116,6 +122,7 @@ def save_result(
     sample_rate,
     features,
     predicted_class,
+    predicted_index,
     confidence,
     status,
     probabilities,
@@ -181,6 +188,10 @@ def save_result(
         )
 
         f.write(
+            f"Predicted index: {predicted_index}\n"
+        )
+
+        f.write(
             f"Confidence: {confidence:.2f}%\n"
         )
 
@@ -211,6 +222,8 @@ def predict(filepath):
     model, device = load_model()
 
     print("Device:", device)
+    print(f"Num classes: {NUM_CLASSES}")
+    print(f"Classes: {CLASS_NAMES}")
 
     iq, sample_rate, input_format = load_input(
         filepath
@@ -224,6 +237,9 @@ def predict(filepath):
     features = prepare_features(iq)
 
     print("Feature shape:", features.shape)
+
+    if features.shape[-1] > model.input_features:
+        features = features[:, :model.input_features]
 
     x = torch.tensor(
         features,
@@ -261,6 +277,10 @@ def predict(filepath):
     )
 
     print(
+        f"Class index: {predicted_index}"
+    )
+
+    print(
         f"Confidence: {confidence_pct:.2f}%"
     )
 
@@ -293,6 +313,7 @@ def predict(filepath):
         sample_rate=sample_rate,
         features=features,
         predicted_class=predicted_class,
+        predicted_index=predicted_index,
         confidence=confidence_pct,
         status=status,
         probabilities=probability_dict,
@@ -307,7 +328,8 @@ def predict(filepath):
     return {
         "file": str(filepath),
         "input_format": input_format,
-        "predicted_class": predicted_class,
+        "class": predicted_class,
+        "class_index": predicted_index,
         "confidence": confidence_pct,
         "status": status,
         "probabilities": probability_dict,

@@ -1,0 +1,28 @@
+SYNAPS TRANSFORMER TRAINING RESULT
+====================================
+
+Model checkpoint: C:\Users\HP\Desktop\SYNAPS\ai\models\transformer.pth
+Total epochs: 2
+Batch size: 16
+Learning rate: 0.0001
+Sequence length: 8000
+Num classes: 5
+Classes: ['BPSK', 'QPSK', 'FSK', 'QAM16', 'MIXED']
+
+TRAINING HISTORY:
+Epoch 01 | Train Loss: 1.4395 | Train Acc: 84.00% | Val Loss: 1.3763 | Val Acc: 100.00%
+Epoch 02 | Train Loss: 1.3936 | Train Acc: 96.00% | Val Loss: 1.3338 | Val Acc: 100.00%
+
+Best Epoch: 2 (Val Acc: 100.00%)
+Final Test Loss: 1.3380
+Final Test Accuracy: 100.00%
+
+PER-CLASS METRICS:
+------------------------------------------------------------
+   Class  Accuracy  Precision    Recall        F1   Count
+------------------------------------------------------------
+    BPSK   100.00%    100.00%   100.00%   100.00%      5
+    QPSK     0.00%      0.00%     0.00%     0.00%      0
+     FSK     0.00%      0.00%     0.00%     0.00%      0
+   QAM16     0.00%      0.00%     0.00%     0.00%      0
+   MIXED     0.00%      0.00%     0.00%     0.00%      0

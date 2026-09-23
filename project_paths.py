@@ -3,11 +3,20 @@ Centralized project paths and canonical dataset resolution for SYNAPS (SIH26147)
 
 This module serves as the single source of truth for repository directory paths,
 supported modulation classes, and canonical filename/sample resolution across
-varying naming conventions (e.g. signal_0601_qam16.iq <-> signal_0601_16qam.json).
+the new dataset layout (v2).
+
+Dataset layout:
+    data/{CLASS}/single/iq/{CLASS}/     (pure: BPSK, QPSK, FSK, QAM16)
+    data/{CLASS}/single/metadata/{CLASS}/
+    data/{CLASS}/single/wav/{CLASS}/
+    data/MIXED/mixed/iq/MIXED/
+    data/MIXED/mixed/metadata/MIXED/
+    data/MIXED/mixed/wav/MIXED/
+    data/MIXED/dataset.csv              (master CSV with split column)
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 import re
 
 
@@ -18,10 +27,11 @@ import re
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 DATA_ROOT = PROJECT_ROOT / "data"
-IQ_ROOT = DATA_ROOT / "iq"
-WAV_ROOT = DATA_ROOT / "wav"
-METADATA_ROOT = DATA_ROOT / "metadata"
-PROCESSED_ROOT = DATA_ROOT / "processed"
+DATASET_CSV = DATA_ROOT / "MIXED" / "dataset.csv"
+
+IQ_ROOT = DATA_ROOT
+WAV_ROOT = DATA_ROOT
+METADATA_ROOT = DATA_ROOT
 
 MODELS_ROOT = PROJECT_ROOT / "models"
 AI_MODELS_ROOT = PROJECT_ROOT / "ai" / "models"
@@ -40,7 +50,10 @@ CLASS_NAMES: List[str] = [
     "QPSK",
     "FSK",
     "QAM16",
+    "MIXED",
 ]
+
+NUM_CLASSES: int = len(CLASS_NAMES)
 
 CLASS_TO_INDEX: Dict[str, int] = {
     name: idx for idx, name in enumerate(CLASS_NAMES)
@@ -64,17 +77,23 @@ MODULATION_ALIASES: Dict[str, str] = {
     "16QAM": "QAM16",
     "16-QAM": "QAM16",
     "16_QAM": "QAM16",
+    "MIXED": "MIXED",
 }
+
+# Pure modulation classes (everything except MIXED)
+PURE_CLASS_NAMES: List[str] = ["BPSK", "QPSK", "FSK", "QAM16"]
 
 
 def normalize_modulation_name(mod_name: str) -> str:
     """
     Normalize any modulation string into canonical class name:
-    'BPSK', 'QPSK', 'FSK', or 'QAM16'.
+    'BPSK', 'QPSK', 'FSK', 'QAM16', or 'MIXED'.
     """
     clean = str(mod_name).strip().upper().replace("-", "").replace("_", "")
     if clean in MODULATION_ALIASES:
         return MODULATION_ALIASES[clean]
+    if "MIXED" in clean:
+        return "MIXED"
     if "16QAM" in clean or "QAM16" in clean:
         return "QAM16"
     if "2FSK" in clean or "FSK" in clean:
@@ -84,6 +103,34 @@ def normalize_modulation_name(mod_name: str) -> str:
     if "BPSK" in clean:
         return "BPSK"
     return mod_name.upper()
+
+
+# =====================================================================
+# DATASET PATH HELPERS
+# =====================================================================
+
+def get_class_iq_dir(class_name: str) -> Path:
+    """Return the IQ directory for a given class."""
+    class_name = normalize_modulation_name(class_name)
+    if class_name == "MIXED":
+        return DATA_ROOT / "MIXED" / "mixed" / "iq" / "MIXED"
+    return DATA_ROOT / class_name / "single" / "iq" / class_name
+
+
+def get_class_metadata_dir(class_name: str) -> Path:
+    """Return the metadata directory for a given class."""
+    class_name = normalize_modulation_name(class_name)
+    if class_name == "MIXED":
+        return DATA_ROOT / "MIXED" / "mixed" / "metadata" / "MIXED"
+    return DATA_ROOT / class_name / "single" / "metadata" / class_name
+
+
+def get_class_wav_dir(class_name: str) -> Path:
+    """Return the WAV directory for a given class."""
+    class_name = normalize_modulation_name(class_name)
+    if class_name == "MIXED":
+        return DATA_ROOT / "MIXED" / "mixed" / "wav" / "MIXED"
+    return DATA_ROOT / class_name / "single" / "wav" / class_name
 
 
 # =====================================================================
@@ -98,79 +145,52 @@ def resolve_sample_paths(
       - 'iq_path': Path to .iq file
       - 'wav_path': Path to .wav file
       - 'metadata_path': Path to .json file
-      - 'class_name': Canonical modulation class name ('BPSK', 'QPSK', 'FSK', 'QAM16')
-      - 'sample_id': Canonical sample ID (e.g. 'signal_0601')
+      - 'class_name': Canonical modulation class name
+      - 'sample_id': Canonical sample ID (e.g. 'signal_00601')
 
     Handles naming variations seamlessly:
-      signal_0601_qam16.iq <-> signal_0601_16qam.json <-> signal_0601_qam16.wav
-      signal_0401_fsk.iq   <-> signal_0401_2fsk.json  <-> signal_0401_fsk.wav
-      signal_0001_bpsk.iq  <-> signal_0001_bpsk.json  <-> signal_0001_bpsk.wav
-      signal_0201_qpsk.iq  <-> signal_0201_qpsk.json  <-> signal_0201_qpsk.wav
+      signal_00001_bpsk.iq  <-> signal_00001_bpsk.json
+      signal_03001_mixed.iq <-> signal_03001_mixed.json
     """
     path = Path(identifier_or_path)
     stem = path.stem.lower()
 
-    # Extract sample number (e.g. '0601' from 'signal_0601_qam16' or '0601')
+    # Extract sample number (e.g. '00601' from 'signal_00601_qpsk')
     match = re.search(r"signal_(\d+)", stem)
     if match:
-        sample_num = int(match.group(1))
-        sample_id = f"signal_{sample_num:04d}"
+        sample_num_str = match.group(1)
+        sample_id = f"signal_{sample_num_str}"
     else:
         num_match = re.search(r"(\d+)", stem)
         if num_match:
-            sample_num = int(num_match.group(1))
-            sample_id = f"signal_{sample_num:04d}"
+            sample_num_str = num_match.group(1)
+            sample_id = f"signal_{int(sample_num_str):05d}"
         else:
-            sample_num = None
             sample_id = stem
+            sample_num_str = None
 
-    # Determine class from stem or path
+    # Determine class from stem or parent directory
     class_name = None
-    if "bpsk" in stem or (path.parent and "bpsk" in path.parent.name.lower()):
-        class_name = "BPSK"
-    elif "qpsk" in stem or (path.parent and "qpsk" in path.parent.name.lower()):
-        class_name = "QPSK"
-    elif "fsk" in stem or "2fsk" in stem or (path.parent and "fsk" in path.parent.name.lower()):
-        class_name = "FSK"
-    elif "qam" in stem or "16qam" in stem or (path.parent and "qam" in path.parent.name.lower()):
-        class_name = "QAM16"
-    elif sample_num is not None:
-        # Range-based fallback based on standard dataset partitioning
-        if 1 <= sample_num <= 200:
-            class_name = "BPSK"
-        elif 201 <= sample_num <= 400:
-            class_name = "QPSK"
-        elif 401 <= sample_num <= 600:
-            class_name = "FSK"
-        elif 601 <= sample_num <= 800:
-            class_name = "QAM16"
+    stem_lower = stem
+    parent_lower = path.parent.name.lower() if path.parent else ""
 
-    # Search candidates in class directory or flat root
+    if "mixed" in stem_lower or parent_lower == "mixed":
+        class_name = "MIXED"
+    elif "bpsk" in stem_lower or parent_lower == "bpsk":
+        class_name = "BPSK"
+    elif "qpsk" in stem_lower or parent_lower == "qpsk":
+        class_name = "QPSK"
+    elif "fsk" in stem_lower or "2fsk" in stem_lower or parent_lower == "fsk":
+        class_name = "FSK"
+    elif "qam" in stem_lower or "16qam" in stem_lower or parent_lower == "qam16":
+        class_name = "QAM16"
+
+    # Search candidates in class directory
     search_classes = [class_name] if class_name else CLASS_NAMES
 
     iq_path = None
     wav_path = None
     meta_path = None
-
-    # Candidate file patterns for this sample
-    iq_names = [
-        f"{sample_id}_bpsk.iq", f"{sample_id}_qpsk.iq",
-        f"{sample_id}_fsk.iq", f"{sample_id}_2fsk.iq",
-        f"{sample_id}_qam16.iq", f"{sample_id}_16qam.iq",
-        f"{stem}.iq", path.name if path.suffix.lower() == ".iq" else f"{path.name}.iq"
-    ]
-    wav_names = [
-        f"{sample_id}_bpsk.wav", f"{sample_id}_qpsk.wav",
-        f"{sample_id}_fsk.wav", f"{sample_id}_2fsk.wav",
-        f"{sample_id}_qam16.wav", f"{sample_id}_16qam.wav",
-        f"{stem}.wav", path.name if path.suffix.lower() == ".wav" else f"{path.name}.wav"
-    ]
-    json_names = [
-        f"{sample_id}_bpsk.json", f"{sample_id}_qpsk.json",
-        f"{sample_id}_2fsk.json", f"{sample_id}_fsk.json",
-        f"{sample_id}_16qam.json", f"{sample_id}_qam16.json",
-        f"{stem}.json", path.name if path.suffix.lower() == ".json" else f"{path.name}.json"
-    ]
 
     # Direct check if path is already existing absolute/relative file
     if path.exists() and path.is_file():
@@ -182,38 +202,46 @@ def resolve_sample_paths(
         elif ext == ".json":
             meta_path = path.resolve()
 
+    # Build candidate filenames from stem
+    candidate_suffixes = []
+    if class_name:
+        mod_lower = class_name.lower()
+        candidate_suffixes.append(f"{sample_id}_{mod_lower}")
+        if class_name == "FSK":
+            candidate_suffixes.append(f"{sample_id}_2fsk")
+            candidate_suffixes.append(f"{sample_id}_fsk")
+        elif class_name == "QAM16":
+            candidate_suffixes.append(f"{sample_id}_16qam")
+            candidate_suffixes.append(f"{sample_id}_qam16")
+    candidate_suffixes.append(stem)
+
     # Search in class folders
     for c in search_classes:
-        iq_dir = IQ_ROOT / c
-        wav_dir = WAV_ROOT / c
-        meta_dir = METADATA_ROOT / c
+        iq_dir = get_class_iq_dir(c)
+        wav_dir = get_class_wav_dir(c)
+        meta_dir = get_class_metadata_dir(c)
 
-        if iq_path is None and iq_dir.exists():
-            for name in iq_names:
-                candidate = iq_dir / name
+        for base in candidate_suffixes:
+            if iq_path is None and iq_dir.exists():
+                candidate = iq_dir / f"{base}.iq"
                 if candidate.exists():
                     iq_path = candidate.resolve()
                     if class_name is None:
                         class_name = c
-                    break
 
-        if wav_path is None and wav_dir.exists():
-            for name in wav_names:
-                candidate = wav_dir / name
+            if wav_path is None and wav_dir.exists():
+                candidate = wav_dir / f"{base}.wav"
                 if candidate.exists():
                     wav_path = candidate.resolve()
                     if class_name is None:
                         class_name = c
-                    break
 
-        if meta_path is None and meta_dir.exists():
-            for name in json_names:
-                candidate = meta_dir / name
+            if meta_path is None and meta_dir.exists():
+                candidate = meta_dir / f"{base}.json"
                 if candidate.exists():
                     meta_path = candidate.resolve()
                     if class_name is None:
                         class_name = c
-                    break
 
     return {
         "iq_path": iq_path,

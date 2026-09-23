@@ -1,0 +1,688 @@
+================================================================================
+SYNAPS / SIH26147 SIGNAL INTELLIGENCE - CURRENT DATASET FORENSIC AUDIT (V1)
+================================================================================
+Document: oldddata.txt
+Date of Forensic Inspection: 2026-09-23
+Auditor: Antigravity AI Forensic Engine
+Project Workspace: SYNAPS / SIH26147
+Status: READ-ONLY FORENSIC REPORT (NO DATASET FILES MODIFIED)
+Purpose: Complete forensic baseline of the CURRENT dataset prior to Dataset V2.
+================================================================================
+
+================================================================================
+1. DATASET DIRECTORY STRUCTURE
+================================================================================
+
+Directory Existence Verification:
+--------------------------------------------------------------------------------
+- data/                     : EXISTS (Directory)
+- data/iq/                  : EXISTS (Directory)
+- data/wav/                 : EXISTS (Directory)
+- data/metadata/            : EXISTS (Directory)
+- data/metadata_backup/     : EXISTS (Directory)
+- data/uploads/             : EXISTS (Directory - contains 26 user-uploaded files)
+- data/processed/           : DOES NOT EXIST (Verified)
+- data/raw/                 : DOES NOT EXIST (Verified)
+- data/train/               : DOES NOT EXIST (Verified)
+- data/validation/          : DOES NOT EXIST (Verified)
+- data/test/                : DOES NOT EXIST (Verified)
+
+Exact Directory Tree and File Count Inventory:
+--------------------------------------------------------------------------------
+data/
+├── dataset.csv                       [1 file, 40 rows (Stale starter set)]
+├── README.txt                        [1 file, describes 40-signal starter dataset]
+├── iq/
+│   ├── README.txt                    [1 file]
+│   ├── BPSK/                         [200 files: signal_0001_bpsk.iq .. signal_0200_bpsk.iq]
+│   ├── FSK/                          [200 files: signal_0401_fsk.iq .. signal_0600_fsk.iq]
+│   ├── QAM16/                        [200 files: signal_0601_qam16.iq .. signal_0800_qam16.iq]
+│   └── QPSK/                         [200 files: signal_0201_qpsk.iq .. signal_0400_qpsk.iq]
+├── wav/
+│   ├── README.txt                    [1 file]
+│   ├── BPSK/                         [200 files: signal_0001_bpsk.wav .. signal_0200_bpsk.wav]
+│   ├── FSK/                          [200 files: signal_0401_fsk.wav .. signal_0600_fsk.wav]
+│   ├── QAM16/                        [200 files: signal_0601_qam16.wav .. signal_0800_qam16.wav]
+│   └── QPSK/                         [200 files: signal_0201_qpsk.wav .. signal_0400_qpsk.wav]
+├── metadata/
+│   ├── dataset.csv                   [1 file, 800 rows (Legacy 20,000-sample table)]
+│   ├── README.txt                    [1 file]
+│   ├── BPSK/                         [200 files: signal_0001_bpsk.json .. signal_0200_bpsk.json]
+│   ├── FSK/                          [200 files: signal_0401_2fsk.json .. signal_0600_2fsk.json]
+│   ├── QAM16/                        [200 files: signal_0601_16qam.json .. signal_0800_16qam.json]
+│   └── QPSK/                         [200 files: signal_0201_qpsk.json .. signal_0400_qpsk.json]
+├── metadata_backup/
+│   ├── dataset.csv                   [1 file, 800 rows (Legacy 20,000-sample table)]
+│   ├── README.txt                    [1 file]
+│   ├── BPSK/                         [200 files: signal_0001_bpsk.json .. signal_0200_bpsk.json]
+│   ├── FSK/                          [200 files: signal_0401_2fsk.json .. signal_0600_2fsk.json]
+│   ├── QAM16/                        [200 files: signal_0601_16qam.json .. signal_0800_16qam.json]
+│   └── QPSK/                         [200 files: signal_0201_qpsk.json .. signal_0400_qpsk.json]
+└── uploads/
+    └── [26 files: 13 .iq files, 13 .wav files from web demo testing]
+
+File Count Summary:
+--------------------------------------------------------------------------------
+- Total .iq files in dataset       : 800
+- Total .wav files in dataset      : 800
+- Total main .json metadata files  : 800
+- Total backup .json metadata files: 800
+- Total .csv files in data/ tree   : 3 (data/dataset.csv, data/metadata/dataset.csv, data/metadata_backup/dataset.csv)
+- Total .txt README files          : 5 (data/README.txt, data/iq/README.txt, data/wav/README.txt, data/metadata/README.txt, data/metadata_backup/README.txt)
+- Upload directory files           : 26 files (13 .iq, 13 .wav)
+- Missing files                    : 0 files in 1..800 sequence
+- Duplicate files (by SHA-256)     : 0 files
+- Suspicious / orphaned files      :
+    1. data/dataset.csv contains only 40 records (stale starter dataset).
+    2. data/metadata/dataset.csv contains 800 records with stale 20,000 samples / untruncated bits.
+    3. data/uploads contains leftover testing files.
+
+================================================================================
+2. IQ DATASET
+================================================================================
+
+Inventory and Technical Specifications:
+--------------------------------------------------------------------------------
+- Total IQ file count              : 800 files
+- Class Breakdown:
+    * BPSK  : 200 files (signal_0001_bpsk.iq to signal_0200_bpsk.iq)
+    * QPSK  : 200 files (signal_0201_qpsk.iq to signal_0400_qpsk.iq)
+    * FSK   : 200 files (signal_0401_fsk.iq to signal_0600_fsk.iq)
+    * QAM16 : 200 files (signal_0601_qam16.iq to signal_0800_qam16.iq)
+- File Format                      : Raw binary interleaved I/Q
+- Data Type (dtype)                : 32-bit floating point (float32 / np.float32 / <f4)
+- Endianness                       : Little-endian
+- Interleaving Convention          : I0, Q0, I1, Q1, I2, Q2, ...
+- File Size on Disk                : Exactly 65,536 bytes per file (800 / 800 files)
+- Float32 Elements per File        : Exactly 16,384 float32 values per file
+- Complex Samples per File         : Exactly 8,192 complex samples per file
+- Sample Count Distribution        :
+    * Minimum sample count         : 8,192
+    * Maximum sample count         : 8,192
+    * Unique sample count values   : Exactly 1 (8,192 across all 800 files)
+- Missing IQ Files                 : 0
+- Duplicate IQ Files (SHA-256)     : 0
+- Corrupted / Unreadable IQ Files  : 0
+- Zero / Constant Amplitude Files  : 0
+- NaN / Inf Occurrence             : 0 occurrences across all 800 files
+
+Statistical Characterization of Representative IQ Waveforms:
+--------------------------------------------------------------------------------
+[BPSK]
+- signal_0001_bpsk.iq:
+    Complex Samples: 8192 | Mean I: -0.050933 | Mean Q: -0.027766 | RMS Amp: 1.000000 | Peak Amp: 1.815542 | Power: 1.000000 | NaN/Inf: False
+- signal_0002_bpsk.iq:
+    Complex Samples: 8192 | Mean I: +0.013477 | Mean Q: +0.019185 | RMS Amp: 1.000000 | Peak Amp: 1.814606 | Power: 1.000000 | NaN/Inf: False
+- signal_0003_bpsk.iq:
+    Complex Samples: 8192 | Mean I: +0.002643 | Mean Q: +0.002496 | RMS Amp: 1.000000 | Peak Amp: 1.765773 | Power: 1.000000 | NaN/Inf: False
+
+[QPSK]
+- signal_0201_qpsk.iq:
+    Complex Samples: 8192 | Mean I: +0.009836 | Mean Q: +0.026642 | RMS Amp: 1.000000 | Peak Amp: 1.727052 | Power: 1.000000 | NaN/Inf: False
+- signal_0202_qpsk.iq:
+    Complex Samples: 8192 | Mean I: -0.019315 | Mean Q: -0.004556 | RMS Amp: 1.000000 | Peak Amp: 1.704912 | Power: 1.000000 | NaN/Inf: False
+- signal_0203_qpsk.iq:
+    Complex Samples: 8192 | Mean I: -0.001744 | Mean Q: -0.038428 | RMS Amp: 1.000000 | Peak Amp: 1.731534 | Power: 1.000000 | NaN/Inf: False
+
+[FSK]
+- signal_0401_fsk.iq:
+    Complex Samples: 8192 | Mean I: +0.012429 | Mean Q: -0.029799 | RMS Amp: 1.000000 | Peak Amp: 1.000000 | Power: 1.000000 | NaN/Inf: False
+- signal_0402_fsk.iq:
+    Complex Samples: 8192 | Mean I: -0.003007 | Mean Q: -0.007943 | RMS Amp: 1.000000 | Peak Amp: 1.000000 | Power: 1.000000 | NaN/Inf: False
+- signal_0403_fsk.iq:
+    Complex Samples: 8192 | Mean I: +0.026268 | Mean Q: +0.006601 | RMS Amp: 1.000000 | Peak Amp: 1.000000 | Power: 1.000000 | NaN/Inf: False
+
+[QAM16]
+- signal_0601_qam16.iq:
+    Complex Samples: 8192 | Mean I: +0.010773 | Mean Q: +0.024973 | RMS Amp: 1.000000 | Peak Amp: 2.045644 | Power: 1.000000 | NaN/Inf: False
+- signal_0602_qam16.iq:
+    Complex Samples: 8192 | Mean I: -0.035896 | Mean Q: -0.010505 | RMS Amp: 1.000000 | Peak Amp: 2.215611 | Power: 1.000000 | NaN/Inf: False
+- signal_0603_qam16.iq:
+    Complex Samples: 8192 | Mean I: -0.021549 | Mean Q: +0.013057 | RMS Amp: 1.000000 | Peak Amp: 2.075812 | Power: 1.000000 | NaN/Inf: False
+
+Observation on Amplitude Scaling:
+Every single IQ file in the dataset has had its RMS power normalized to exactly 1.000000 (Unit Power), regardless of the `amplitude_scale` specified in the metadata.
+
+================================================================================
+3. WAV DATASET
+================================================================================
+
+Inventory and Technical Specifications:
+--------------------------------------------------------------------------------
+- Total WAV File Count             : 800 files
+- Class Breakdown:
+    * BPSK  : 200 files (signal_0001_bpsk.wav to signal_0200_bpsk.wav)
+    * QPSK  : 200 files (signal_0201_qpsk.wav to signal_0400_qpsk.wav)
+    * FSK   : 200 files (signal_0401_fsk.wav to signal_0600_fsk.wav)
+    * QAM16 : 200 files (signal_0601_qam16.wav to signal_0800_qam16.wav)
+- Sampling Rate                    : Exactly 1,000,000 Hz (800 / 800 files)
+- Channel Count                    : Exactly 2 Channels (Stereo, 800 / 800 files)
+- Sample Format / Dtype            : 32-bit IEEE float (float32)
+- Frame Count per File             : Exactly 8,192 frames (800 / 800 files)
+- Duration per File                : Exactly 0.008192 seconds (8.192 ms)
+- Channel Mapping Convention       : Channel 0 = In-Phase (I), Channel 1 = Quadrature (Q)
+- File Size on Disk                : Exactly 65,580 bytes (RIFF/WAVE header 44 bytes + 65,536 audio payload)
+- Inconsistent Sample Rates        : 0
+- Inconsistent Frame Counts        : 0
+- Missing / Corrupted WAV Files    : 0
+
+================================================================================
+4. IQ ↔ WAV CONSISTENCY
+================================================================================
+
+Verification Methodology:
+All 800 IQ and WAV file pairs were compared sample-by-sample:
+  - Channel 0 of WAV was subtracted from I-components (even indices) of IQ.
+  - Channel 1 of WAV was subtracted from Q-components (odd indices) of IQ.
+  - Maximum absolute difference, mean absolute difference, and correlation were calculated.
+
+Results:
+--------------------------------------------------------------------------------
+- BPSK (200 pairs)  : Max Absolute Difference = 0.0000000000e+00 | Correlation = 1.0000000000
+- QPSK (200 pairs)  : Max Absolute Difference = 0.0000000000e+00 | Correlation = 1.0000000000
+- FSK (200 pairs)   : Max Absolute Difference = 0.0000000000e+00 | Correlation = 1.0000000000
+- QAM16 (200 pairs) : Max Absolute Difference = 0.0000000000e+00 | Correlation = 1.0000000000
+
+Total Bitwise Identical Pairs: 800 / 800 (100.0%)
+Global Maximum Absolute Difference: 0.0000000000e+00
+
+Consistency Verdict:
+CONFIRMED SAME
+
+Explanation:
+The WAV files and IQ files contain the exact same underlying digital signal data saved simultaneously in float32 without any loss, scaling, or rounding differences.
+
+================================================================================
+5. MAIN METADATA
+================================================================================
+
+Directory: data/metadata/
+Total JSON Records: 800 files
+
+Class Distribution in JSON Metadata:
+- BPSK  : 200 records (labeled "BPSK")
+- QPSK  : 200 records (labeled "QPSK")
+- FSK   : 200 records (labeled "2FSK")
+- QAM16 : 200 records (labeled "16QAM")
+
+JSON Schema Definition (15 Fields):
+--------------------------------------------------------------------------------
+1.  filename                     : String   (e.g., "signal_0001_bpsk", "signal_0401_2fsk")
+2.  modulation                   : String   (Values: "BPSK", "QPSK", "2FSK", "16QAM")
+3.  sampling_frequency_hz        : Integer  (Fixed: 1000000)
+4.  symbol_rate_hz               : Integer  (Fixed: 100000)
+5.  nominal_carrier_frequency_hz : Integer  (Fixed: 0)
+6.  frequency_offset_hz          : Integer  (Values: -10000, -5000, 0, 5000, 10000)
+7.  phase_offset_degrees         : Float    (Values: 0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0)
+8.  amplitude_scale              : Float    (Values: 0.75, 1.0, 1.25, 1.5)
+9.  signal_to_noise_ratio_db     : Integer  (Values: 5, 10, 15, 20, 25)  [CRITICAL: 1 record missing]
+10. samples                      : Integer  (Fixed: 8192)
+11. samples_per_symbol           : Integer  (Fixed: 10)
+12. iq_file_convention           : String   ("interleaved little-endian float32 I,Q")
+13. wav_file_convention          : String   ("two-channel float32 WAV: channel 1=I, channel 2=Q")
+14. baseband                     : Boolean  (Fixed: True)
+15. bits                         : String   (Binary string of '0' and '1')
+
+Schema Irregularities and Malformations:
+--------------------------------------------------------------------------------
+- MISSING FIELD DEFECT:
+  File `data/metadata/BPSK/signal_0002_bpsk.json` is missing the `signal_to_noise_ratio_db` field entirely. (799 records have 15 fields, 1 record has 14 fields).
+- NULL VALUES: None.
+- DUPLICATE JSON RECORDS: None (800 unique filenames).
+
+Representative Metadata Records:
+--------------------------------------------------------------------------------
+[BPSK] data/metadata/BPSK/signal_0001_bpsk.json:
+{
+  "filename": "signal_0001_bpsk",
+  "modulation": "BPSK",
+  "sampling_frequency_hz": 1000000,
+  "symbol_rate_hz": 100000,
+  "nominal_carrier_frequency_hz": 0,
+  "frequency_offset_hz": -10000,
+  "phase_offset_degrees": 0.0,
+  "amplitude_scale": 1.0,
+  "signal_to_noise_ratio_db": 10,
+  "samples": 8192,
+  "samples_per_symbol": 10,
+  "iq_file_convention": "interleaved little-endian float32 I,Q",
+  "wav_file_convention": "two-channel float32 WAV: channel 1=I, channel 2=Q",
+  "baseband": true,
+  "bits": "01001000001010010111100101001001..." [Length: 819]
+}
+
+[QPSK] data/metadata/QPSK/signal_0201_qpsk.json:
+{
+  "filename": "signal_0201_qpsk",
+  "modulation": "QPSK",
+  "sampling_frequency_hz": 1000000,
+  "symbol_rate_hz": 100000,
+  "nominal_carrier_frequency_hz": 0,
+  "frequency_offset_hz": 5000,
+  "phase_offset_degrees": 315.0,
+  "amplitude_scale": 0.5,
+  "signal_to_noise_ratio_db": 5,
+  "samples": 8192,
+  "samples_per_symbol": 10,
+  "iq_file_convention": "interleaved little-endian float32 I,Q",
+  "wav_file_convention": "two-channel float32 WAV: channel 1=I, channel 2=Q",
+  "baseband": true,
+  "bits": "11110000101100111111101011100100..." [Length: 1638]
+}
+
+[FSK] data/metadata/FSK/signal_0401_2fsk.json:
+{
+  "filename": "signal_0401_2fsk",
+  "modulation": "2FSK",
+  "sampling_frequency_hz": 1000000,
+  "symbol_rate_hz": 100000,
+  "nominal_carrier_frequency_hz": 0,
+  "frequency_offset_hz": -10000,
+  "phase_offset_degrees": 0.0,
+  "amplitude_scale": 1.0,
+  "signal_to_noise_ratio_db": 10,
+  "samples": 8192,
+  "samples_per_symbol": 10,
+  "iq_file_convention": "interleaved little-endian float32 I,Q",
+  "wav_file_convention": "two-channel float32 WAV: channel 1=I, channel 2=Q",
+  "baseband": true,
+  "bits": "11101110000111000101111110111011..." [Length: 2000]
+}
+
+[QAM16] data/metadata/QAM16/signal_0601_16qam.json:
+{
+  "filename": "signal_0601_16qam",
+  "modulation": "16QAM",
+  "sampling_frequency_hz": 1000000,
+  "symbol_rate_hz": 100000,
+  "nominal_carrier_frequency_hz": 0,
+  "frequency_offset_hz": -10000,
+  "phase_offset_degrees": 0.0,
+  "amplitude_scale": 1.0,
+  "signal_to_noise_ratio_db": 10,
+  "samples": 8192,
+  "samples_per_symbol": 10,
+  "iq_file_convention": "interleaved little-endian float32 I,Q",
+  "wav_file_convention": "two-channel float32 WAV: channel 1=I, channel 2=Q",
+  "baseband": true,
+  "bits": "10010000101110001111010111010010..." [Length: 3276]
+}
+
+================================================================================
+6. METADATA BACKUP
+================================================================================
+
+Directory: data/metadata_backup/
+Total JSON Records: 800 files
+
+Forensic Comparison with Main Metadata:
+--------------------------------------------------------------------------------
+1. Schema: Identical 15 fields.
+2. Defect Persistence: `data/metadata_backup/BPSK/signal_0002_bpsk.json` also lacks `signal_to_noise_ratio_db`.
+3. Parameter Differences:
+    * `samples` Field:
+        - metadata_backup : Exactly 20,000 across all 800 records.
+        - main metadata   : Exactly 8,192 across all 800 records.
+    * `bits` Field Length:
+        - BPSK   : backup = 2,000 bits  | main = 819 bits   (main is exact prefix of backup)
+        - QPSK   : backup = 4,000 bits  | main = 1,638 bits (main is exact prefix of backup)
+        - QAM16  : backup = 8,000 bits  | main = 3,276 bits (main is exact prefix of backup)
+        - 2FSK   : backup = 2,000 bits  | main = 2,000 bits (EXACT DUPLICATE, NOT TRUNCATED)
+4. Accompanying CSV:
+    * `data/metadata_backup/dataset.csv` contains 800 rows with `samples=20000` and full 2000/4000/2000/8000 bit lengths.
+    * `data/metadata/dataset.csv` is identical to the backup CSV and was never synchronized with the main JSON updates.
+
+Provenance Determination:
+`data/metadata_backup` represents the original, unmodified metadata generation for a 20,000-sample dataset. When `scripts/fix_metadata_samples.py` was executed, the original JSONs were backed up to `metadata_backup`, and the main JSONs had their `samples` field rewritten to 8192 and bitstrings truncated mathematically (except FSK, which was overlooked).
+
+================================================================================
+7. MAIN METADATA ↔ IQ MATCHING
+================================================================================
+
+Exact File Stem Matching:
+--------------------------------------------------------------------------------
+- BPSK  : 200 / 200 Exact Match (`signal_XXXX_bpsk.json` <-> `signal_XXXX_bpsk.iq`)
+- QPSK  : 200 / 200 Exact Match (`signal_XXXX_qpsk.json` <-> `signal_XXXX_qpsk.iq`)
+- FSK   : 0 / 200 Exact Match   (`signal_XXXX_2fsk.json` vs `signal_XXXX_fsk.iq`)
+- QAM16 : 0 / 200 Exact Match   (`signal_XXXX_16qam.json` vs `signal_XXXX_qam16.iq`)
+
+Alias-Normalized Sample Matching:
+- Total Metadata Records with matching IQ : 800 / 800 (100%)
+- Total Metadata Records without IQ       : 0
+- Total IQ Files without Metadata         : 0
+
+Naming Discrepancies:
+- 400 out of 800 files (50% of the entire dataset) suffer from class naming mismatch:
+    * FSK metadata is named `_2fsk.json` while IQ waveform is named `_fsk.iq`.
+    * QAM16 metadata is named `_16qam.json` while IQ waveform is named `_qam16.iq`.
+    * The internal `filename` field in metadata stores the JSON stem, causing naive file loaders to fail unless aliasing logic (like `project_paths.py`) is implemented.
+
+================================================================================
+8. MAIN METADATA ↔ WAV MATCHING
+================================================================================
+
+Exact File Stem Matching:
+--------------------------------------------------------------------------------
+- BPSK  : 200 / 200 Exact Match (`signal_XXXX_bpsk.json` <-> `signal_XXXX_bpsk.wav`)
+- QPSK  : 200 / 200 Exact Match (`signal_XXXX_qpsk.json` <-> `signal_XXXX_qpsk.wav`)
+- FSK   : 0 / 200 Exact Match   (`signal_XXXX_2fsk.json` vs `signal_XXXX_fsk.wav`)
+- QAM16 : 0 / 200 Exact Match   (`signal_XXXX_16qam.json` vs `signal_XXXX_qam16.wav`)
+
+Alias-Normalized Sample Matching:
+- Total Metadata Records with matching WAV : 800 / 800 (100%)
+- Total Metadata Records without WAV       : 0
+- Total WAV Files without Metadata         : 0
+
+================================================================================
+9. BITSTREAM ANALYSIS
+================================================================================
+
+Theoretical vs Stored Bitstream Lengths:
+--------------------------------------------------------------------------------
+Theoretical relationship for duration N samples at SPS samples per symbol:
+  Symbols = N / SPS
+  Bits = Symbols * (Bits per Symbol)
+
+For current dataset parameters (N = 8,192 samples, declared SPS = 10):
+  Expected Symbols = 8,192 / 10 = 819.2 symbols
+
+[BPSK] (1 bit/symbol):
+  Declared bit length in metadata : 819 bits
+  Represented samples            : 819 * 10 = 8,190 samples (2 samples unrepresented)
+  Backup bit length              : 2,000 bits (for 20,000 samples)
+
+[QPSK] (2 bits/symbol):
+  Declared bit length in metadata : 1,638 bits
+  Represented symbols            : 1,638 / 2 = 819 symbols
+  Represented samples            : 819 * 10 = 8,190 samples (2 samples unrepresented)
+  Backup bit length              : 4,000 bits (for 20,000 samples)
+
+[16QAM] (4 bits/symbol):
+  Declared bit length in metadata : 3,276 bits
+  Represented symbols            : 3,276 / 4 = 819 symbols
+  Represented samples            : 819 * 10 = 8,190 samples (2 samples unrepresented)
+  Backup bit length              : 8,000 bits (for 20,000 samples)
+
+[2FSK] (1 bit/symbol):
+  Declared bit length in metadata : 2,000 bits (CRITICAL MISMATCH)
+  Represented symbols            : 2,000 symbols
+  Represented samples at 10 SPS  : 2,000 * 10 = 20,000 samples (11,808 excess samples)
+  Backup bit length              : 2,000 bits
+
+Alternative 8-SPS Interpretation (Documented in data/wav/README.txt):
+  If N = 8,192 and SPS = 8 (1024 symbols):
+  - BPSK  : Expected 1,024 bits vs 819 stored (Mismatch)
+  - QPSK  : Expected 2,048 bits vs 1,638 stored (Mismatch)
+  - 2FSK  : Expected 1,024 bits vs 2,000 stored (Mismatch)
+  - 16QAM : Expected 4,096 bits vs 3,276 stored (Mismatch)
+
+Conclusion:
+The stored bitstreams in metadata do not match either 10 SPS or 8 SPS integer symbol boundaries for 8,192-sample waveforms.
+
+================================================================================
+10. MAIN METADATA vs BACKUP BITS
+================================================================================
+
+Exact Bitwise String Comparison:
+--------------------------------------------------------------------------------
+- BPSK  (200 pairs) : 200 / 200 (100%) main bits are EXACT PREFIX of backup bits (first 819 bits of 2000).
+- QPSK  (200 pairs) : 200 / 200 (100%) main bits are EXACT PREFIX of backup bits (first 1638 bits of 4000).
+- QAM16 (200 pairs) : 200 / 200 (100%) main bits are EXACT PREFIX of backup bits (first 3276 bits of 8000).
+- 2FSK  (200 pairs) : 200 / 200 (100%) main bits are EXACT IDENTICAL MATCH to backup bits (2000 bits).
+
+Forensic Finding:
+The main metadata bitstreams are purely string-sliced sub-strings of the backup metadata, created by a mechanical script rather than regenerated from the waveforms.
+
+================================================================================
+11. WAVEFORM ↔ METADATA BIT PROVENANCE
+================================================================================
+
+Generator Code Analysis (`scripts/generate_dataset.py`):
+--------------------------------------------------------------------------------
+- Random Number Generation: `rng = np.random.default_rng()` (Unseeded, non-deterministic).
+- Seed Storage: NO seed parameter is stored in the JSON metadata or CSV.
+- AWGN Noise Addition: Noise is generated with random phase and amplitude per run.
+- Reproducibility: Without stored random seeds, re-running `generate_dataset.py` produces completely different bits, symbols, and noise vectors.
+
+Demodulation and Provenance Verification Test:
+--------------------------------------------------------------------------------
+To test whether the IQ waveforms correspond to the metadata bits, representative IQ waveforms were demodulated under ideal, known metadata synchronization parameters (exact CFO removal, exact phase rotation, and optimal symbol timing sampling):
+
+- BPSK (signal_0001_bpsk) : Recovered 819 bits | Ground Truth 819 bits | Bit Match: 49.82% (BER: 50.18%)
+- BPSK (signal_0003_bpsk) : Recovered 819 bits | Ground Truth 819 bits | Bit Match: 52.50% (BER: 47.50%)
+- QPSK (signal_0201_qpsk) : Recovered 1638 bits | Ground Truth 1638 bits | Bit Match: 52.56% (BER: 47.44%)
+- QPSK (signal_0203_qpsk) : Recovered 1638 bits | Ground Truth 1638 bits | Bit Match: 50.06% (BER: 49.94%)
+- FSK (signal_0401_fsk)   : Recovered 819 bits | Ground Truth 2000 bits | Bit Match: 51.53% (BER: 48.47%)
+- FSK (signal_0403_fsk)   : Recovered 819 bits | Ground Truth 2000 bits | Bit Match: 52.01% (BER: 47.99%)
+- QAM16 (signal_0601_qam) : Recovered 3276 bits | Ground Truth 3276 bits | Bit Match: 50.58% (BER: 49.42%)
+- QAM16 (signal_0603_qam) : Recovered 3276 bits | Ground Truth 3276 bits | Bit Match: 50.00% (BER: 50.00%)
+
+Provenance Verdict:
+NOT SUPPORTED
+
+Forensic Conclusion:
+The IQ waveforms in `data/iq` and the metadata bit records in `data/metadata` belong to disconnected generation runs. The bit error rate across all classes is ~50% (equivalent to a random coin flip). The ground truth bits stored in metadata CANNOT be used for valid BER evaluation or demodulator testing.
+
+================================================================================
+12. FSK-SPECIFIC PROBLEM
+================================================================================
+
+Forensic Investigation of FSK Discrepancy:
+--------------------------------------------------------------------------------
+1. Instantaneous Frequency State Dwell Times:
+   Analysis of the instantaneous frequency transitions (`np.angle(iq[1:] * conj(iq[:-1]))`) across all 200 FSK signals reveals:
+   - Primary run length mode: Exactly 8 samples (121 occurrences per signal).
+   - Higher modes: Exactly 16 samples (48), 24 samples (24), 32 samples (10), 40 samples (7).
+   - All run lengths are integer multiples of 8 samples.
+   - At sampling rate 1,000,000 Hz, 8 samples per symbol corresponds to a Baud rate of:
+     Symbol Rate = 1,000,000 / 8 = 125,000 Baud.
+
+2. Metadata Declarations:
+   - Declared `symbol_rate_hz`     : 100,000 Hz (Disagrees with 125,000 Hz waveform)
+   - Declared `samples_per_symbol` : 10 (Disagrees with 8 SPS waveform)
+   - Declared `samples`            : 8,192
+   - Declared `bits` length        : 2,000 bits (Disagrees with both 1024 symbols at 8 SPS and 819 symbols at 10 SPS)
+
+3. Root Cause:
+   FSK signals were generated at 125 kBaud (8 SPS) with 1024 symbols = 8192 samples. However, the metadata was copied from the 100 kBaud / 10 SPS / 20,000-sample template and was never corrected or truncated.
+
+Scope of Issue:
+This is not an isolated FSK bug. It reflects an end-to-end dataset generation and synchronization failure where waveform parameters, README documentation, JSON metadata, and CSV indices were assembled asynchronously from incompatible runs.
+
+================================================================================
+13. DATASET PARAMETER DISTRIBUTION
+================================================================================
+
+Distribution Breakdown Across All 800 Records:
+--------------------------------------------------------------------------------
+
+[BPSK] (200 records):
+- SNR (dB)             : 5 discrete values [5 (40), 10 (39), 15 (40), 20 (40), 25 (40)]  *1 record missing SNR
+- CFO (Hz)             : 5 discrete values [-10000 (40), -5000 (40), 0 (40), 5000 (40), 10000 (40)]
+- Phase Offset (deg)   : 8 discrete values [0, 45, 90, 135, 180, 225, 270, 315] (25 each)
+- Amplitude Scale      : 4 discrete values [0.75 (50), 1.0 (50), 1.25 (50), 1.5 (50)]
+- Sampling Rate (Hz)   : 1,000,000 (Fixed)
+- Symbol Rate (Hz)     : 100,000 (Fixed)
+- Samples per Symbol   : 10 (Fixed)
+- Sample Count         : 8,192 (Fixed)
+- Bit Length           : 819 (Fixed)
+- Unique Combinations  : 173 unique parameter tuples out of 200 files
+
+[QPSK] (200 records):
+- SNR (dB)             : 5 discrete values [5 (40), 10 (40), 15 (40), 20 (40), 25 (40)]
+- CFO (Hz)             : 5 discrete values [-10000 (40), -5000 (40), 0 (40), 5000 (40), 10000 (40)]
+- Phase Offset (deg)   : 8 discrete values [0, 45, 90, 135, 180, 225, 270, 315] (25 each)
+- Amplitude Scale      : 4 discrete values [0.75 (50), 1.0 (50), 1.25 (50), 1.5 (50)]
+- Sampling Rate (Hz)   : 1,000,000 (Fixed)
+- Symbol Rate (Hz)     : 100,000 (Fixed)
+- Samples per Symbol   : 10 (Fixed)
+- Sample Count         : 8,192 (Fixed)
+- Bit Length           : 1,638 (Fixed)
+- Unique Combinations  : 173 unique parameter tuples out of 200 files
+
+[FSK] (200 records):
+- SNR (dB)             : 5 discrete values [5 (40), 10 (40), 15 (40), 20 (40), 25 (40)]
+- CFO (Hz)             : 5 discrete values [-10000 (40), -5000 (40), 0 (40), 5000 (40), 10000 (40)]
+- Phase Offset (deg)   : 8 discrete values [0, 45, 90, 135, 180, 225, 270, 315] (25 each)
+- Amplitude Scale      : 4 discrete values [0.75 (50), 1.0 (50), 1.25 (50), 1.5 (50)]
+- Sampling Rate (Hz)   : 1,000,000 (Fixed)
+- Symbol Rate (Hz)     : 100,000 (Fixed in metadata, 125,000 in waveform)
+- Samples per Symbol   : 10 (Fixed in metadata, 8 in waveform)
+- Sample Count         : 8,192 (Fixed)
+- Bit Length           : 2,000 (Fixed)
+- Unique Combinations  : 175 unique parameter tuples out of 200 files
+
+[QAM16] (200 records):
+- SNR (dB)             : 5 discrete values [5 (40), 10 (40), 15 (40), 20 (40), 25 (40)]
+- CFO (Hz)             : 5 discrete values [-10000 (40), -5000 (40), 0 (40), 5000 (40), 10000 (40)]
+- Phase Offset (deg)   : 8 discrete values [0, 45, 90, 135, 180, 225, 270, 315] (25 each)
+- Amplitude Scale      : 4 discrete values [0.75 (50), 1.0 (50), 1.25 (50), 1.5 (50)]
+- Sampling Rate (Hz)   : 1,000,000 (Fixed)
+- Symbol Rate (Hz)     : 100,000 (Fixed)
+- Samples per Symbol   : 10 (Fixed)
+- Sample Count         : 8,192 (Fixed)
+- Bit Length           : 3,276 (Fixed)
+- Unique Combinations  : 185 unique parameter tuples out of 200 files
+
+Diversity Assessment:
+The parameters are drawn strictly from small, rigid discrete grids (only 5 SNRs, 5 CFOs, 8 Phases, 4 Amplitudes) with no continuous random variation.
+
+================================================================================
+14. DATASET QUALITY PROBLEMS
+================================================================================
+
+Categorized Problem Inventory:
+--------------------------------------------------------------------------------
+
+[CRITICAL-1] Waveform ↔ Metadata Bitstream Disconnection (Broken Provenance)
+- Evidence: Demodulation BER is ~50% across all classes under ideal synchronization. Metadata bits are from an unrelated generation run.
+- Impact: Ground-truth bit validation and BER calculations are invalid.
+
+[CRITICAL-2] Waveform vs Metadata Symbol Rate Disagreement (FSK Discrepancy)
+- Evidence: FSK waveforms operate at 125 kBaud (8 SPS) while metadata declares 100 kBaud (10 SPS).
+- Impact: Demodulators relying on metadata SPS fail to decode FSK symbols properly.
+
+[CRITICAL-3] Unrecoverable Generation Provenance (Lack of Random Seeds)
+- Evidence: `generate_dataset.py` uses unseeded `np.random.default_rng()`. Metadata contains no seed field.
+- Impact: Signals cannot be re-generated or extended deterministically.
+
+[HIGH-1] File Naming Inconsistency Between IQ, WAV, and Metadata
+- Evidence: 400 files use `_2fsk.json` / `_16qam.json` while IQ and WAV use `_fsk.iq` / `_qam16.iq`.
+- Impact: Direct path resolution breaks without hardcoded alias dictionaries.
+
+[HIGH-2] Stale and Inconsistent CSV Catalogs
+- Evidence: `data/dataset.csv` has only 40 records. `data/metadata/dataset.csv` has 800 records with stale `samples=20000` and untruncated bits.
+- Impact: CSV loaders load conflicting data compared to JSON files.
+
+[HIGH-3] Truncation Miscalculation and Bitstream Incompleteness
+- Evidence: BPSK has 819 bits (8,190 samples at 10 SPS), leaving 2 trailing samples unmapped. FSK was never truncated and retains 2000 bits (20,000 samples).
+- Impact: Incomplete symbol coverage across signal buffers.
+
+[MEDIUM-1] Malformed Schema: Missing Field in Metadata
+- Evidence: `signal_0002_bpsk.json` in both main and backup metadata lacks `signal_to_noise_ratio_db`.
+- Impact: Ingestion pipelines crash with `KeyError` unless guarded by defensive defaults.
+
+[MEDIUM-2] Rigid Discrete Parameter Grid (Low Diversity)
+- Evidence: Parameters restricted to 5 SNRs, 5 CFOs, 8 Phases, 4 Amplitudes.
+- Impact: AI models overfit to discrete parameter steps rather than generalizing.
+
+[LOW-1] Leftover Testing Files in Workspace
+- Evidence: `data/uploads/` contains 26 orphaned files from manual test uploads.
+- Impact: Workspace clutter and potential confusion during automated directory scanning.
+
+================================================================================
+15. CURRENT DATASET SUMMARY
+================================================================================
+
+========================================
+OLD DATASET FINAL SUMMARY
+========================================
+
+Total IQ files: 800
+Total WAV files: 800
+Total metadata records: 800
+Total backup metadata records: 800
+
+Class distribution:
+BPSK: 200
+QPSK: 200
+FSK: 200
+QAM16: 200
+
+IQ/WAV consistency:
+CONFIRMED SAME (100% Bitwise identical across all 800 pairs, max abs diff = 0.0)
+
+Metadata/IQ consistency:
+INCONSISTENT (50% naming mismatch in FSK/QAM16; samples field fixed from 20000 to 8192)
+
+Metadata/WAV consistency:
+INCONSISTENT (50% naming mismatch in FSK/QAM16; README states 8 SPS while metadata states 10 SPS)
+
+Main vs backup metadata:
+STRUCTURALLY RELATED BUT MUTATED (Main metadata bits are string-sliced prefixes of backup, except FSK which was overlooked; sample counts changed from 20000 to 8192)
+
+Bitstream consistency:
+BROKEN (Stored bits do not match waveform duration, integer symbol counts, or demodulated output)
+
+Waveform ↔ metadata bit provenance:
+NOT SUPPORTED (Demodulation against metadata bits yields ~50% BER; random seeds were not recorded)
+
+Known FSK issue:
+VERIFIED WAVEFORM/METADATA DISAGREEMENT (Waveform is 125 kBaud / 8 SPS; metadata claims 100 kBaud / 10 SPS / 2000 bits)
+
+Major dataset problems:
+1. Complete lack of waveform-to-bitstream provenance (50% BER).
+2. FSK symbol rate and SPS mismatch (125k Baud / 8 SPS vs 100k Baud / 10 SPS).
+3. Class naming divergence (_2fsk vs _fsk, _16qam vs _qam16).
+4. Stale CSV files (40-row root dataset.csv, 20,000-sample metadata CSV).
+5. Missing SNR key in signal_0002_bpsk.json.
+6. Lack of deterministic generator seeds.
+7. Overly rigid discrete parameter grid.
+
+Current dataset generation method:
+Ad-hoc multi-generational synthetic generation without seed tracking, followed by manual file restructuring and partial metadata field overwrites (`fix_metadata_samples.py`).
+
+Why this dataset should/should not be retained:
+THIS DATASET MUST NOT BE RETAINED FOR ACCURATE GROUND TRUTH VALIDATION.
+While the raw IQ/WAV waveforms are mathematically valid synthetic signals suitable for basic modulation classification, the metadata ground-truth bitstreams are completely disconnected from the waveforms, the symbol rates are mismatched for FSK, and the CSV catalogs are corrupt. The entire dataset must be replaced with a cleanly generated Dataset V2.
+
+================================================================================
+16. DATASET V2 REQUIREMENTS
+================================================================================
+
+========================================
+REQUIREMENTS FOR DATASET V2
+========================================
+
+The following requirements directly address verified defects in the old dataset:
+
+1. Deterministic Seed Architecture:
+   - Every sample must have an explicit integer random seed stored in its metadata.
+   - The generator must produce identical IQ, WAV, and bits given the seed and metadata parameters.
+
+2. True Bitstream Provenance:
+   - Ground-truth bits must be generated first, modulated directly into IQ/WAV, and saved in the same operation.
+   - Demodulating clean signals must achieve 100% bit accuracy (0% BER).
+
+3. Exact Integer Symbol Alignment:
+   - Sample count must be an exact integer multiple of samples per symbol (e.g., 1024 symbols * 8 SPS = 8192 samples, or 1000 symbols * 10 SPS = 10000 samples).
+   - Bitstream length must strictly equal `num_symbols * bits_per_symbol` (BPSK: 1, QPSK: 2, 2FSK: 1, 16QAM: 4).
+
+4. Unified Canonical Naming Convention:
+   - IQ, WAV, and JSON metadata must use identical file stems (e.g., `signal_0001_bpsk.iq`, `signal_0001_bpsk.wav`, `signal_0001_bpsk.json`).
+   - Modulations must use standardized folder and file tags: `BPSK`, `QPSK`, `FSK` (or `2FSK`), `QAM16` (or `16QAM`).
+
+5. Synchronized Simultaneous File & CSV Generation:
+   - IQ, WAV, JSON metadata, and master `dataset.csv` must be written simultaneously during generation to prevent stale catalog files.
+
+6. Strict Schema Validation:
+   - Automated post-generation schema verification to ensure 100% of records contain all 15 required fields with non-null values.
+
+7. Continuous Parameter Diversity:
+   - SNR, CFO, and Phase should support both continuous uniform distributions and stratified benchmark bins to prevent model overfitting.
+
+8. Built-in Dataset Partitioning:
+   - Generated dataset should provide formal train / validation / test splits with balanced class and SNR distributions.
+================================================================================
+END OF FORENSIC REPORT - oldddata.txt
+================================================================================

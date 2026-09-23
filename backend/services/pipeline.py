@@ -117,14 +117,33 @@ class AnalysisPipeline:
         # 1. INPUT HANDLING
         # =================================================================
 
+        meta_dict = None
         if isinstance(file_path_or_samples, (str, Path)):
             input_path = Path(file_path_or_samples)
             fmt = detect_format(str(input_path))
 
+            # Early metadata resolution to infer nominal Fs and samples_per_symbol if not explicitly given
+            try:
+                paths = resolve_sample_paths(input_path)
+                meta_path = paths.get("metadata_path")
+                if meta_path and meta_path.exists():
+                    import json
+                    with open(meta_path, "r", encoding="utf-8") as f:
+                        meta_dict = json.load(f)
+            except Exception:
+                meta_dict = None
+
+            effective_sample_rate = sample_rate
+            if effective_sample_rate is None and meta_dict and "sampling_frequency_hz" in meta_dict:
+                effective_sample_rate = float(meta_dict["sampling_frequency_hz"])
+
             raw_samples, fs = load_signal(
                 str(input_path),
-                iq_sample_rate=sample_rate,
+                iq_sample_rate=effective_sample_rate,
             )
+
+            if samples_per_symbol == 10 and meta_dict and "samples_per_symbol" in meta_dict:
+                samples_per_symbol = int(meta_dict["samples_per_symbol"])
 
             sample_id = input_path.stem
             file_str = str(input_path)
@@ -168,6 +187,8 @@ class AnalysisPipeline:
 
         if self.ai_available and self.model is not None:
             features = prepare_features(preprocessed)
+            if hasattr(self.model, "input_features") and features.shape[-1] > self.model.input_features:
+                features = features[:, :self.model.input_features]
 
             x_tensor = torch.tensor(
                 features,
@@ -290,33 +311,26 @@ class AnalysisPipeline:
             )
 
         # =================================================================
-        # 7. METADATA REFERENCE
+        # 7. METADATA REFERENCE & SIGNAL TYPE
         # =================================================================
 
         meta_symbol_rate = None
+        signal_type = "SINGLE"
+        detected_components = []
+        component_results = []
 
-        if isinstance(file_path_or_samples, (str, Path)):
-            try:
-                paths = resolve_sample_paths(file_path_or_samples)
-                meta_path = paths.get("metadata_path")
+        if meta_dict is not None:
+            if meta_dict.get("signal_type") == "MIXED" or meta_dict.get("modulation") == "MIXED":
+                signal_type = "MIXED"
+                detected_components = meta_dict.get("component_modulations", [])
+                component_results = meta_dict.get("components", [])
+            else:
+                value = meta_dict.get("symbol_rate_hz")
+                if value:
+                    meta_symbol_rate = float(value)
 
-                if meta_path and meta_path.exists():
-                    import json
-
-                    with open(
-                        meta_path,
-                        "r",
-                        encoding="utf-8",
-                    ) as f:
-                        meta_dict = json.load(f)
-
-                    value = meta_dict.get("symbol_rate_hz")
-
-                    if value:
-                        meta_symbol_rate = float(value)
-
-            except Exception:
-                meta_symbol_rate = None
+        if pred_class == "MIXED":
+            signal_type = "MIXED"
 
         measured_rate = float(
             timing_res["symbol_rate_hz"]
@@ -497,37 +511,42 @@ class AnalysisPipeline:
             dtype=np.uint8,
         )
 
-        try:
-            if final_mod == "BPSK":
-                recovered_bits = demodulate_bpsk(symbols)
+        if final_mod == "MIXED" or signal_type == "MIXED":
+            # For MIXED signals: composite signal is preserved without fake global demodulation
+            recovered_bits = np.array([], dtype=np.uint8)
+            sync_status = "MIXED_COMPOSITE"
+        else:
+            try:
+                if final_mod == "BPSK":
+                    recovered_bits = demodulate_bpsk(symbols)
 
-            elif final_mod == "QPSK":
-                recovered_bits = demodulate_qpsk(symbols)
+                elif final_mod == "QPSK":
+                    recovered_bits = demodulate_qpsk(symbols)
 
-            elif final_mod == "FSK":
-                recovered_bits = demodulate_fsk(
-                    phase_synced,
-                    samples_per_symbol,
+                elif final_mod == "FSK":
+                    recovered_bits = demodulate_fsk(
+                        phase_synced,
+                        samples_per_symbol,
+                    )
+
+                elif final_mod == "QAM16":
+                    recovered_bits = demodulate_16qam(symbols)
+
+                else:
+                    recovered_bits = np.array([], dtype=np.uint8)
+
+            except Exception as e:
+                print(
+                    f"[WARN] Demodulation error for "
+                    f"{final_mod}: {e}"
+                )
+                recovered_bits = np.array(
+                    [],
+                    dtype=np.uint8,
                 )
 
-            elif final_mod == "QAM16":
-                recovered_bits = demodulate_16qam(symbols)
-
-            else:
-                recovered_bits = demodulate_bpsk(symbols)
-
-        except Exception as e:
-            print(
-                f"[WARN] Demodulation error for "
-                f"{final_mod}: {e}"
-            )
-            recovered_bits = np.array(
-                [],
-                dtype=np.uint8,
-            )
-
         # =================================================================
-        # 13. DECODING & VALIDATION
+        # 13. DECODING & BIT RECOVERY VALIDATION
         # =================================================================
 
         decoded_text = None
@@ -552,11 +571,77 @@ class AnalysisPipeline:
             payload_val,
         )
 
+        # Bit Recovery Validation vs Metadata Reference
+        if final_mod == "MIXED" or signal_type == "MIXED":
+            bit_recovery_summary = {
+                "validation_status": "COMPONENT_RECOVERY_NOT_VALIDATED",
+                "reference_bit_count": None,
+                "recovered_bit_count": None,
+                "matched_bit_count": None,
+                "bit_accuracy_pct": None,
+                "ber": None,
+                "component_recovery": [
+                    {
+                        "component_index": i + 1,
+                        "modulation": comp.get("modulation", "UNKNOWN"),
+                        "status": "Component bit recovery not validated",
+                        "num_bits": comp.get("num_bits", len(comp.get("bits", ""))),
+                    }
+                    for i, comp in enumerate(component_results)
+                ] if component_results else [],
+            }
+        elif meta_dict and "bits" in meta_dict and len(meta_dict["bits"]) > 0:
+            ref_bits_str = meta_dict["bits"]
+            exp_bits = np.array([int(b) for b in ref_bits_str], dtype=np.uint8)
+            cmp_len = min(len(exp_bits), len(recovered_bits))
+            if cmp_len > 0:
+                matched_bits = int(np.sum(exp_bits[:cmp_len] == recovered_bits[:cmp_len]))
+                bit_acc = float((matched_bits / cmp_len) * 100.0)
+                ber_val = float(1.0 - (matched_bits / cmp_len))
+            else:
+                matched_bits = 0
+                bit_acc = 0.0
+                ber_val = 1.0
+
+            val_status = "VALIDATED" if bit_acc >= 85.0 else ("SUBOPTIMAL" if bit_acc >= 50.0 else "POOR_ALIGNMENT")
+            bit_recovery_summary = {
+                "validation_status": val_status,
+                "reference_bit_count": len(exp_bits),
+                "recovered_bit_count": len(recovered_bits),
+                "matched_bit_count": matched_bits,
+                "bit_accuracy_pct": round(bit_acc, 2),
+                "ber": round(ber_val, 4),
+            }
+        else:
+            bit_recovery_summary = {
+                "validation_status": "UNVALIDATED_NO_METADATA" if len(recovered_bits) > 0 else "NO_RECOVERED_BITS",
+                "reference_bit_count": None,
+                "recovered_bit_count": len(recovered_bits),
+                "matched_bit_count": None,
+                "bit_accuracy_pct": None,
+                "ber": None,
+            }
+
         # =================================================================
         # 14. COMPILE REPORT
         # =================================================================
 
         raw_analysis = {
+            "signal_type": signal_type,
+            "detected_components": detected_components,
+            "component_results": [
+                {
+                    "component_index": i + 1,
+                    "modulation": comp.get("modulation", "UNKNOWN"),
+                    "symbol_rate_hz": comp.get("symbol_rate_hz"),
+                    "frequency_offset_hz": comp.get("frequency_offset_hz"),
+                    "frequency_placement_hz": comp.get("frequency_placement_hz"),
+                    "amplitude_scale": comp.get("amplitude_scale"),
+                    "num_bits": comp.get("num_bits", len(comp.get("bits", ""))),
+                    "status": "Component bit recovery not validated",
+                }
+                for i, comp in enumerate(component_results)
+            ],
             "input_info": {
                 "sample_id": sample_id,
                 "file_path": file_str,
@@ -587,6 +672,8 @@ class AnalysisPipeline:
             },
             "decoding": {
                 "decoded_message": decoded_text,
+                "decoding_status": "DECODED_ASCII" if decoded_text else ("NOT_APPLICABLE" if (final_mod == "MIXED" or signal_type == "MIXED") else ("UNSTRUCTURED_BINARY" if len(recovered_bits) > 0 else "NO_BITS")),
+                "fec_status": "NOT_CONFIGURED",
                 "entropy": payload_val.get(
                     "entropy",
                     0.0,
@@ -597,6 +684,7 @@ class AnalysisPipeline:
                 ),
             },
             "recovery_validation": recovery_val,
+            "bit_recovery": bit_recovery_summary,
         }
 
         report = generate_intelligence_report(raw_analysis)
@@ -938,33 +1026,51 @@ class AnalysisPipeline:
                 f"{dsp_summary['cfo_hz']:.1f} Hz"
             )
 
-        explanation = (
-            f"The AI Transformer model classified this signal as "
-            f"{final_mod} with {conf_pct:.1f}% confidence "
-            f"({det_status}). "
+        if final_mod == "MIXED" or signal_type == "MIXED":
+            comps_str = ", ".join(detected_components) if detected_components else "multiple components"
+            explanation = (
+                f"The AI Transformer model classified this signal as MIXED multi-carrier composite modulation with "
+                f"{conf_pct:.1f}% confidence ({det_status}). "
+                f"DSP physical analysis provides multi-modal confirmation with an estimated SNR of "
+                f"{dsp_summary['snr_db']:.1f} dB, occupied bandwidth of "
+                f"{dsp_summary['bandwidth_hz'] / 1e3:.1f} kHz (99% power), and multi-modal evidence score of "
+                f"{evidence.get('overall_evidence_score', 1.0):.2f}. "
+                f"Constituent modulations referenced/detected: {comps_str}. "
+                f"Composite waveform is preserved intact; component bit recovery is not validated."
+            )
+        else:
+            if bit_recovery_summary.get("validation_status") == "VALIDATED":
+                bit_val_str = f"Demodulation recovered {len(recovered_bits)} bits with {bit_recovery_summary.get('bit_accuracy_pct', 0):.1f}% reference agreement (BER={bit_recovery_summary.get('ber', 0):.4f})."
+            elif bit_recovery_summary.get("reference_bit_count") is not None:
+                bit_val_str = f"Demodulation recovered {len(recovered_bits)} bits ({bit_recovery_summary.get('bit_accuracy_pct', 0):.1f}% reference agreement)."
+            else:
+                bit_val_str = f"Demodulation produced {len(recovered_bits)} recovered raw bits."
 
-            f"DSP physical analysis provides supporting evidence "
-            f"with an estimated SNR of "
-            f"{dsp_summary['snr_db']:.1f} dB, "
+            explanation = (
+                f"The AI Transformer model classified this signal as "
+                f"{final_mod} with {conf_pct:.1f}% confidence "
+                f"({det_status}). "
 
-            f"{cfo_exp_str}, "
+                f"DSP physical analysis provides supporting evidence "
+                f"with an estimated SNR of "
+                f"{dsp_summary['snr_db']:.1f} dB, "
 
-            f"and occupied bandwidth of "
-            f"{dsp_summary['bandwidth_hz'] / 1e3:.1f} kHz "
-            f"(99% power). "
+                f"{cfo_exp_str}, "
 
-            f"Higher-Order Cumulants "
-            f"(C40={abs(dsp_summary['hoc'].get('C40', 0)):.3f}, "
-            f"C42={abs(dsp_summary['hoc'].get('C42', 0)):.3f}) "
+                f"and occupied bandwidth of "
+                f"{dsp_summary['bandwidth_hz'] / 1e3:.1f} kHz "
+                f"(99% power). "
 
-            f"and spectral profile support this hypothesis "
-            f"with multi-modal evidence score of "
-            f"{evidence.get('overall_evidence_score', 1.0):.2f}. "
+                f"Higher-Order Cumulants "
+                f"(C40={abs(dsp_summary['hoc'].get('C40', 0)):.3f}, "
+                f"C42={abs(dsp_summary['hoc'].get('C42', 0)):.3f}) "
 
-            f"Demodulation produced "
-            f"{len(recovered_bits)} recovered raw bits; "
-            f"data validation has not yet been established."
-        )
+                f"and spectral profile support this hypothesis "
+                f"with multi-modal evidence score of "
+                f"{evidence.get('overall_evidence_score', 1.0):.2f}. "
+
+                f"{bit_val_str}"
+            )
 
         # =================================================================
         # 19. FRONTEND DATA
@@ -984,6 +1090,7 @@ class AnalysisPipeline:
                 else "in_memory_signal.iq"
             ),
             "format": fmt,
+            "signalType": signal_type,
             "classification": final_mod,
             "confidence": float(conf_pct) / 100.0,
             "sampleRate": fs,
@@ -996,11 +1103,32 @@ class AnalysisPipeline:
             "features": features_list,
             "explanation": explanation,
 
+            # Detected components for MIXED
+            "detectedComponents": detected_components,
+            "componentResults": [
+                {
+                    "componentIndex": i + 1,
+                    "modulation": comp.get("modulation", "UNKNOWN"),
+                    "symbolRate": comp.get("symbol_rate_hz"),
+                    "frequencyOffset": comp.get("frequency_offset_hz"),
+                    "frequencyPlacement": comp.get("frequency_placement_hz"),
+                    "powerScale": comp.get("amplitude_scale"),
+                    "bitCount": comp.get("num_bits", len(comp.get("bits", ""))),
+                    "status": "Component bit recovery not validated",
+                }
+                for i, comp in enumerate(component_results)
+            ],
+
             # Recovered Bits -> Data Conversion
-            "recoveredBitCount": int(len(recovered_bits)),
+            "recoveredBitCount": None if (final_mod == "MIXED" or signal_type == "MIXED") else int(len(recovered_bits)),
             "convertedData": decoded_text,
+            "decodingStatus": "DECODED_ASCII" if decoded_text else ("NOT_APPLICABLE" if (final_mod == "MIXED" or signal_type == "MIXED") else ("UNSTRUCTURED_BINARY" if len(recovered_bits) > 0 else "NO_BITS")),
+            "fecStatus": "NOT_CONFIGURED",
             "dataEncoding": "ASCII",
             "dataConversionValid": decoded_text is not None,
+
+            # Bit recovery validation
+            "bitRecovery": bit_recovery_summary,
 
             # Existing visualization fields
             "waveformSamples": waveform_samples,
