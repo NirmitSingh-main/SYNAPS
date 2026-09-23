@@ -6,12 +6,15 @@ import { Hero } from "@/components/si/Hero";
 import { Pipeline } from "@/components/si/Pipeline";
 import { Capabilities } from "@/components/si/Capabilities";
 import { ResultPreview } from "@/components/si/ResultPreview";
+import { useHashScroll } from "@/lib/navigation";
 
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
 function Index() {
+  useHashScroll();
+
   return (
     <ThemeProvider>
       <div className="relative min-h-screen">

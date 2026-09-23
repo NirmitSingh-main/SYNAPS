@@ -1,0 +1,21 @@
+SYNAPS TRANSFORMER TRAINING RESULT
+====================================
+
+Model checkpoint: C:\SYNAPS\SYNAPS\ai\models\transformer.pth
+Total epochs: 2
+Batch size: 16
+Learning rate: 0.0001
+
+TRAINING HISTORY:
+Epoch 01 | Train Loss: 1.3625 | Train Acc: 38.21% | Val Loss: 1.3378 | Val Acc: 48.33%
+Epoch 02 | Train Loss: 1.2991 | Train Acc: 50.71% | Val Loss: 1.2453 | Val Acc: 52.50%
+
+Best Epoch: 2 (Val Acc: 52.50%)
+Final Test Loss: 1.2410
+Final Test Accuracy: 50.00%
+
+PER-CLASS ACCURACY:
+BPSK: 50.00% (15/30)
+QPSK: 0.00% (0/30)
+FSK: 100.00% (30/30)
+QAM16: 50.00% (15/30)

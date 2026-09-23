@@ -1,0 +1,73 @@
+{
+  "model_architecture": "SignalTransformer",
+  "model_path": "C:\\SYNAPS\\SYNAPS\\ai\\models\\transformer.pth",
+  "configuration": {
+    "epochs": 2,
+    "batch_size": 16,
+    "learning_rate": 0.0001,
+    "sequence_length": 1000,
+    "smoke_test": true
+  },
+  "class_mapping": {
+    "BPSK": 0,
+    "QPSK": 1,
+    "FSK": 2,
+    "QAM16": 3
+  },
+  "best_epoch": 2,
+  "best_validation_accuracy": 52.5,
+  "final_test_loss": 1.2410354057947794,
+  "final_test_accuracy": 50.0,
+  "per_class_metrics": {
+    "BPSK": {
+      "accuracy": 50.0,
+      "precision": 27.27272727272727,
+      "recall": 50.0,
+      "f1_score": 35.29411764705882,
+      "correct": 15,
+      "total": 30
+    },
+    "QPSK": {
+      "accuracy": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
+      "correct": 0,
+      "total": 30
+    },
+    "FSK": {
+      "accuracy": 100.0,
+      "precision": 100.0,
+      "recall": 100.0,
+      "f1_score": 100.0,
+      "correct": 30,
+      "total": 30
+    },
+    "QAM16": {
+      "accuracy": 50.0,
+      "precision": 42.857142857142854,
+      "recall": 50.0,
+      "f1_score": 46.15384615384615,
+      "correct": 15,
+      "total": 30
+    }
+  },
+  "training_history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.3624749864850725,
+      "train_accuracy": 38.21428571428571,
+      "validation_loss": 1.3377604007720947,
+      "validation_accuracy": 48.333333333333336,
+      "learning_rate": 0.0001
+    },
+    {
+      "epoch": 2,
+      "train_loss": 1.2991428579602922,
+      "train_accuracy": 50.71428571428571,
+      "validation_loss": 1.2453003565470377,
+      "validation_accuracy": 52.5,
+      "learning_rate": 0.0001
+    }
+  ]
+}
