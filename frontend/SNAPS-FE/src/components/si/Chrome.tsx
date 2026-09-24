@@ -1,8 +1,9 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, ChevronDown, User } from "lucide-react";
 import { useTheme, usePrefersReducedMotion } from "@/lib/theme";
 import { useAppNavigation } from "@/lib/navigation";
+import { useAuth } from "@/lib/AuthContext";
 
 export function MagneticLink({
   children,
@@ -59,15 +60,99 @@ export function MagneticLink({
   );
 }
 
+function AccountMenu({ onSignOut, isAdmin }: { onSignOut: () => void; isAdmin: boolean }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Account menu"
+        className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border px-2 text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
+      >
+        <User className="h-[14px] w-[14px]" />
+        <ChevronDown
+          className={`h-[11px] w-[11px] transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <>
+          {/* Backdrop to close */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute right-0 top-full z-50 mt-2 w-48 border border-border bg-background/95 backdrop-blur-sm shadow-lg py-1">
+            <Link
+              to="/dashboard"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center px-4 py-2 font-mono text-[0.78rem] text-muted-foreground transition-colors hover:bg-surface/60 hover:text-foreground"
+            >
+              Dashboard
+            </Link>
+            <Link
+              to="/history"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center px-4 py-2 font-mono text-[0.78rem] text-muted-foreground transition-colors hover:bg-surface/60 hover:text-foreground"
+            >
+              History
+            </Link>
+            {isAdmin && (
+              <Link
+                to="/admin"
+                onClick={() => setOpen(false)}
+                className="flex w-full items-center px-4 py-2 font-mono text-[0.78rem] text-signal transition-colors hover:bg-surface/60"
+              >
+                Admin Dashboard
+              </Link>
+            )}
+            <div className="my-1 border-t border-border" />
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onSignOut();
+              }}
+              className="flex w-full items-center px-4 py-2 font-mono text-[0.78rem] text-muted-foreground transition-colors hover:bg-surface/60 hover:text-foreground"
+            >
+              Sign out
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function Header() {
   const { mode, toggle } = useTheme();
   const { navigateToHome, navigateToAnalyze, navigateToHowItWorks } = useAppNavigation();
+  const { user, signOut, isAdmin } = useAuth();
 
-  const links = [
-    { label: "Home", href: "/", onClick: navigateToHome },
-    { label: "Analyze", href: "/analyze", onClick: navigateToAnalyze },
-    { label: "How it works", href: "/#how-it-works", onClick: navigateToHowItWorks },
-  ];
+  const navLinks = user
+    ? [
+        { label: "Home", href: "/", onClick: navigateToHome },
+        { label: "Analyze", href: "/analyze", onClick: navigateToAnalyze },
+        { label: "Dashboard", href: "/dashboard", onClick: undefined },
+        { label: "History", href: "/history", onClick: undefined },
+        ...(isAdmin ? [{ label: "Admin", href: "/admin", onClick: undefined }] : []),
+        { label: "How it works", href: "/#how-it-works", onClick: navigateToHowItWorks },
+      ]
+    : [
+        { label: "Home", href: "/", onClick: navigateToHome },
+        { label: "Analyze", href: "/analyze", onClick: navigateToAnalyze },
+        { label: "How it works", href: "/#how-it-works", onClick: navigateToHowItWorks },
+      ];
+
+  async function handleSignOut() {
+    try {
+      await signOut();
+    } catch {
+      // ignore
+    }
+  }
 
   return (
     <header className="fixed top-0 left-0 z-50 w-full border-b border-border/60 bg-background/70 backdrop-blur-md transition-colors duration-500">
@@ -80,18 +165,28 @@ export function Header() {
           Signal Intelligence
         </a>
         <nav className="hidden items-center gap-8 md:flex">
-          {links.map((l) => (
-            <a
-              key={l.label}
-              href={l.href}
-              onClick={l.onClick}
-              className="text-[0.85rem] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {l.label}
-            </a>
-          ))}
+          {navLinks.map((l) =>
+            l.onClick ? (
+              <a
+                key={l.label}
+                href={l.href}
+                onClick={l.onClick}
+                className="text-[0.85rem] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {l.label}
+              </a>
+            ) : (
+              <Link
+                key={l.label}
+                to={l.href}
+                className="text-[0.85rem] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {l.label}
+              </Link>
+            )
+          )}
         </nav>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button
             onClick={toggle}
             aria-label={mode === "dark" ? "Switch to light theme" : "Switch to dark theme"}
@@ -99,6 +194,18 @@ export function Header() {
           >
             {mode === "dark" ? <Sun className="h-[15px] w-[15px]" /> : <Moon className="h-[15px] w-[15px]" />}
           </button>
+
+          {user ? (
+            <AccountMenu onSignOut={handleSignOut} isAdmin={isAdmin} />
+          ) : (
+            <Link
+              to="/auth"
+              className="font-mono text-[0.78rem] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Sign in
+            </Link>
+          )}
+
           <a
             href="/analyze"
             onClick={navigateToAnalyze}
@@ -164,4 +271,3 @@ export function Footer() {
     </footer>
   );
 }
-

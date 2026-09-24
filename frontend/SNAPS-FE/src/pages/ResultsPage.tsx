@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { ThemeProvider } from "@/lib/theme";
 import { Header, Footer } from "@/components/si/Chrome";
@@ -15,6 +16,8 @@ import {
   getAnalysisFile,
   getAnalysisSample,
 } from "@/lib/analysisStore";
+import { useAuth } from "@/lib/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 function formatHz(hz: number): string {
   if (!hz || isNaN(hz)) return "0 Hz";
@@ -34,12 +37,65 @@ function formatCount(n: number): string {
 }
 
 export function ResultsPage() {
+  const { user } = useAuth();
   const liveData = getAnalysisData();
   const file = getAnalysisFile();
   const sampleId = getAnalysisSample();
 
   const data = liveData || demoAnalysis;
   const isLive = !!liveData;
+
+  // Prevent duplicate saves (React StrictMode guard)
+  const savedRef = useRef<unknown>(null);
+
+  useEffect(() => {
+    if (!isLive || !user || !data) return;
+    if (savedRef.current === data) return;
+    savedRef.current = data;
+
+    const currentUser = user;
+
+    async function saveReport() {
+      try {
+        const { error } = await supabase.from("analysis_reports").insert({
+          user_id: currentUser.id,
+          filename: file?.name || data.filename || sampleId || "unknown",
+          format: data.format || "IQ",
+          classification: data.classification,
+          confidence: data.confidence,
+          sample_rate: data.sampleRate,
+          duration: data.duration,
+          bandwidth: data.bandwidth,
+          snr: data.snr,
+          peak_frequency: data.peakFrequency,
+          num_samples: data.numSamples,
+          prediction_breakdown: data.predictionBreakdown,
+          features: data.features,
+          explanation: data.explanation,
+          raw_report: {
+            classification: data.classification,
+            confidence: data.confidence,
+            sampleRate: data.sampleRate,
+            duration: data.duration,
+            bandwidth: data.bandwidth,
+            snr: data.snr,
+            peakFrequency: data.peakFrequency,
+            numSamples: data.numSamples,
+            predictionBreakdown: data.predictionBreakdown,
+            features: data.features,
+            explanation: data.explanation,
+          },
+        });
+        if (error) {
+          console.error("Failed to save analysis report:", error);
+        }
+      } catch (err) {
+        console.error("Failed to save analysis report:", err);
+      }
+    }
+
+    saveReport();
+  }, [isLive, user, data, file, sampleId]);
 
   const metrics = [
     { label: "Sample rate", value: formatHz(data.sampleRate), unit: "" },
