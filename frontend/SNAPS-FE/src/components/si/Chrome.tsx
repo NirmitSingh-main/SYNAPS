@@ -133,18 +133,18 @@ export function Header() {
 
   const navLinks = user
     ? [
-        { label: "Home", href: "/", onClick: navigateToHome },
-        { label: "Analyze", href: "/analyze", onClick: navigateToAnalyze },
-        { label: "Dashboard", href: "/dashboard", onClick: undefined },
-        { label: "History", href: "/history", onClick: undefined },
-        ...(isAdmin ? [{ label: "Admin", href: "/admin", onClick: undefined }] : []),
-        { label: "How it works", href: "/#how-it-works", onClick: navigateToHowItWorks },
-      ]
+      { label: "Home", href: "/", onClick: navigateToHome },
+      { label: "Analyze", href: "/analyze", onClick: navigateToAnalyze },
+      { label: "Dashboard", href: "/dashboard", onClick: undefined },
+      { label: "History", href: "/history", onClick: undefined },
+      ...(isAdmin ? [{ label: "Admin", href: "/admin", onClick: undefined }] : []),
+      { label: "How it works", href: "/#how-it-works", onClick: navigateToHowItWorks },
+    ]
     : [
-        { label: "Home", href: "/", onClick: navigateToHome },
-        { label: "Analyze", href: "/analyze", onClick: navigateToAnalyze },
-        { label: "How it works", href: "/#how-it-works", onClick: navigateToHowItWorks },
-      ];
+      { label: "Home", href: "/", onClick: navigateToHome },
+      { label: "Analyze", href: "/analyze", onClick: navigateToAnalyze },
+      { label: "How it works", href: "/#how-it-works", onClick: navigateToHowItWorks },
+    ];
 
   async function handleSignOut() {
     try {

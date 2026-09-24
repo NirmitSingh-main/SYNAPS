@@ -10,7 +10,7 @@ import { ModulationDonutChart } from "@/components/analytics/ModulationDonutChar
 import { ActivityLineChart, type ActivityPoint } from "@/components/analytics/ActivityLineChart";
 import { ConfidenceBarChart } from "@/components/analytics/ConfidenceBarChart";
 import { SignalQualityChart } from "@/components/analytics/SignalQualityChart";
-import { Users, Activity, ShieldCheck, Radio, ShieldAlert, ArrowRight } from "lucide-react";
+import { Users, Activity, ShieldCheck, Radio, ShieldAlert } from "lucide-react";
 
 interface AdminAnalysisRecord {
   id: string;
@@ -120,7 +120,6 @@ export function AdminPage() {
     };
   }, [user, loading, isAdmin, navigate]);
 
-  // Summaries
   const summary = useMemo(() => {
     const totalAnalyses = totalAnalysesCount ?? allReports.length;
     if (allReports.length === 0) {
@@ -147,7 +146,6 @@ export function AdminPage() {
     };
   }, [totalUsersCount, totalAnalysesCount, allReports, recentUsers]);
 
-  // Platform modulation distribution
   const modulationDistribution = useMemo(() => {
     if (allReports.length === 0) return [];
     const counts: Record<string, number> = {};
@@ -165,7 +163,6 @@ export function AdminPage() {
       .sort((a, b) => b.count - a.count);
   }, [allReports]);
 
-  // Platform activity line chart
   const activityData = useMemo<ActivityPoint[]>(() => {
     if (allReports.length === 0) return [];
 
@@ -201,7 +198,6 @@ export function AdminPage() {
     });
   }, [allReports]);
 
-  // Platform avg confidence per mod
   const confidenceByModulation = useMemo(() => {
     return CANONICAL_MODS.map((mod) => {
       const matching = allReports.filter(
@@ -219,7 +215,6 @@ export function AdminPage() {
     });
   }, [allReports]);
 
-  // Platform SNR per mod
   const snrByModulation = useMemo(() => {
     return CANONICAL_MODS.map((mod) => {
       const matching = allReports.filter(
@@ -240,7 +235,6 @@ export function AdminPage() {
     });
   }, [allReports]);
 
-  // User map for quick ID to email display
   const userMap = useMemo(() => {
     const map: Record<string, string> = {};
     recentUsers.forEach((u) => {
@@ -249,7 +243,6 @@ export function AdminPage() {
     return map;
   }, [recentUsers]);
 
-  // View report in results
   const handleViewReport = (rep: AdminAnalysisRecord) => {
     const raw = rep.raw_report || {};
     const analysisResponse: AnalysisResponse = {
@@ -311,7 +304,7 @@ export function AdminPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 border border-signal/60 bg-signal/15 px-3 py-1 font-mono text-[0.68rem] tracking-widest text-signal font-semibold">
+              <span className="inline-flex items-center gap-1.5 border border-signal/60 bg-signal/15 px-3 py-1 font-mono text-[0.68rem] tracking-widest text-signal font-semibold rounded-md">
                 <ShieldAlert className="h-3.5 w-3.5" />
                 ADMINISTRATOR ACCESS
               </span>
@@ -321,7 +314,7 @@ export function AdminPage() {
           <div className="rule-line mb-8" />
 
           {error && (
-            <div className="mb-8 border border-destructive/50 bg-destructive/10 p-4 font-mono text-xs text-destructive">
+            <div className="mb-8 floating-surface p-4 font-mono text-xs text-destructive border-destructive/50 bg-destructive/10">
               {error}
             </div>
           )}
@@ -329,7 +322,7 @@ export function AdminPage() {
           {/* 4 Summary Cards */}
           <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {/* Card 1: Total Users */}
-            <div className="border border-border bg-surface/30 p-5">
+            <div className="floating-surface floating-surface-hover p-5 transition-all">
               <div className="flex items-center justify-between">
                 <p className="label-mono">TOTAL USERS</p>
                 <Users className="h-4 w-4 text-muted-foreground" />
@@ -349,7 +342,7 @@ export function AdminPage() {
             </div>
 
             {/* Card 2: Total Analyses */}
-            <div className="border border-border bg-surface/30 p-5">
+            <div className="floating-surface floating-surface-hover p-5 transition-all">
               <div className="flex items-center justify-between">
                 <p className="label-mono">TOTAL ANALYSES</p>
                 <Activity className="h-4 w-4 text-muted-foreground" />
@@ -369,7 +362,7 @@ export function AdminPage() {
             </div>
 
             {/* Card 3: Avg Confidence */}
-            <div className="border border-border bg-surface/30 p-5">
+            <div className="floating-surface floating-surface-hover p-5 transition-all">
               <div className="flex items-center justify-between">
                 <p className="label-mono">AVG CONFIDENCE</p>
                 <ShieldCheck className="h-4 w-4 text-signal" />
@@ -391,7 +384,7 @@ export function AdminPage() {
             </div>
 
             {/* Card 4: Active Modulations */}
-            <div className="border border-border bg-surface/30 p-5">
+            <div className="floating-surface floating-surface-hover p-5 transition-all">
               <div className="flex items-center justify-between">
                 <p className="label-mono">ACTIVE MODULATIONS</p>
                 <Radio className="h-4 w-4 text-muted-foreground" />
@@ -450,10 +443,10 @@ export function AdminPage() {
             </div>
           </div>
 
-          {/* Platform Tables Grid: Recent Analyses & Registered Users */}
+          {/* Tables Grid: Recent Analyses & Registered Users */}
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-            {/* Recent Analyses Table */}
-            <div className="border border-border bg-surface/30 p-5 lg:col-span-7">
+            {/* Recent Analyses */}
+            <div className="floating-surface p-5 lg:col-span-7">
               <p className="label-mono mb-1">RECENT PLATFORM ANALYSES</p>
               <p className="text-xs text-muted-foreground mb-4">
                 Latest characterizations across all users
@@ -462,7 +455,7 @@ export function AdminPage() {
               {fetching ? (
                 <div className="space-y-2">
                   {[...Array(6)].map((_, i) => (
-                    <div key={i} className="h-10 animate-pulse bg-border/40" />
+                    <div key={i} className="h-10 animate-pulse rounded-lg bg-border/40" />
                   ))}
                 </div>
               ) : allReports.length === 0 ? (
@@ -470,57 +463,44 @@ export function AdminPage() {
                   No analyses recorded on platform yet.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left font-mono text-xs">
-                    <thead>
-                      <tr className="border-b border-border text-muted-foreground text-[0.68rem]">
-                        <th className="py-2 pr-3 font-normal">USER</th>
-                        <th className="py-2 pr-3 font-normal">FILE</th>
-                        <th className="py-2 pr-3 font-normal">CLASS</th>
-                        <th className="py-2 pr-3 font-normal">CONF</th>
-                        <th className="py-2 pr-3 font-normal">SNR</th>
-                        <th className="py-2 text-right font-normal">WHEN</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/40">
-                      {allReports.slice(0, 10).map((r) => (
-                        <tr
-                          key={r.id}
-                          onClick={() => handleViewReport(r)}
-                          className="group cursor-pointer transition-colors hover:bg-surface/80"
-                        >
-                          <td className="py-2.5 pr-3 text-muted-foreground text-[0.68rem]">
-                            <span className="block max-w-[90px] truncate">
-                              {userMap[r.user_id] || `${r.user_id.slice(0, 6)}...`}
-                            </span>
-                          </td>
-                          <td className="py-2.5 pr-3 font-medium text-foreground">
-                            <span className="block max-w-[130px] truncate">
-                              {r.filename}
-                            </span>
-                          </td>
-                          <td className="py-2.5 pr-3 text-signal font-semibold">
-                            {r.classification}
-                          </td>
-                          <td className="py-2.5 pr-3 text-foreground">
-                            {(r.confidence * 100).toFixed(1)}%
-                          </td>
-                          <td className="py-2.5 pr-3 text-muted-foreground">
-                            {typeof r.snr === "number" ? `${r.snr.toFixed(1)} dB` : "—"}
-                          </td>
-                          <td className="py-2.5 text-right text-muted-foreground text-[0.68rem]">
-                            {timeAgo(r.created_at)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-1.5">
+                  {allReports.slice(0, 8).map((r) => (
+                    <div
+                      key={r.id}
+                      onClick={() => handleViewReport(r)}
+                      className="floating-row flex cursor-pointer items-center justify-between px-3.5 py-2.5 font-mono text-xs"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-[0.68rem] text-muted-foreground shrink-0 max-w-[80px] truncate">
+                          {userMap[r.user_id]?.split("@")[0] || `${r.user_id.slice(0, 5)}...`}
+                        </span>
+                        <span className="font-medium text-foreground truncate max-w-[120px] sm:max-w-[160px]">
+                          {r.filename}
+                        </span>
+                        <span className="rounded-sm border border-signal/30 bg-signal/10 px-1.5 py-0.5 text-[0.65rem] font-semibold text-signal shrink-0">
+                          {r.classification}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-4 shrink-0 font-mono text-[0.72rem]">
+                        <span className="text-foreground">
+                          {(r.confidence * 100).toFixed(1)}%
+                        </span>
+                        <span className="text-muted-foreground hidden sm:inline">
+                          {typeof r.snr === "number" ? `${r.snr.toFixed(1)} dB` : "—"}
+                        </span>
+                        <span className="text-muted-foreground text-[0.68rem]">
+                          {timeAgo(r.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Registered Users Table */}
-            <div className="border border-border bg-surface/30 p-5 lg:col-span-5">
+            {/* Registered Users */}
+            <div className="floating-surface p-5 lg:col-span-5">
               <p className="label-mono mb-1">RECENT REGISTERED USERS</p>
               <p className="text-xs text-muted-foreground mb-4">
                 User accounts & role authorizations
@@ -529,7 +509,7 @@ export function AdminPage() {
               {fetching ? (
                 <div className="space-y-2">
                   {[...Array(6)].map((_, i) => (
-                    <div key={i} className="h-10 animate-pulse bg-border/40" />
+                    <div key={i} className="h-10 animate-pulse rounded-lg bg-border/40" />
                   ))}
                 </div>
               ) : recentUsers.length === 0 ? (
@@ -537,41 +517,31 @@ export function AdminPage() {
                   No registered users found.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left font-mono text-xs">
-                    <thead>
-                      <tr className="border-b border-border text-muted-foreground text-[0.68rem]">
-                        <th className="py-2 pr-3 font-normal">EMAIL</th>
-                        <th className="py-2 pr-3 font-normal">ROLE</th>
-                        <th className="py-2 text-right font-normal">REGISTERED</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/40">
-                      {recentUsers.map((u) => (
-                        <tr key={u.id} className="transition-colors hover:bg-surface/80">
-                          <td className="py-2.5 pr-3 font-medium text-foreground">
-                            <span className="block max-w-[150px] truncate">
-                              {u.email}
-                            </span>
-                          </td>
-                          <td className="py-2.5 pr-3">
-                            <span
-                              className={`px-1.5 py-0.5 font-mono text-[0.65rem] font-semibold uppercase ${
-                                u.role === "admin"
-                                  ? "border border-signal/40 bg-signal/15 text-signal"
-                                  : "border border-border bg-surface text-muted-foreground"
-                              }`}
-                            >
-                              {u.role}
-                            </span>
-                          </td>
-                          <td className="py-2.5 text-right text-muted-foreground text-[0.68rem]">
-                            {timeAgo(u.created_at)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-1.5">
+                  {recentUsers.map((u) => (
+                    <div
+                      key={u.id}
+                      className="floating-row flex items-center justify-between px-3.5 py-2.5 font-mono text-xs"
+                    >
+                      <span className="font-medium text-foreground truncate max-w-[150px]">
+                        {u.email}
+                      </span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span
+                          className={`rounded-sm px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase ${
+                            u.role === "admin"
+                              ? "border border-signal/40 bg-signal/15 text-signal"
+                              : "border border-border bg-surface text-muted-foreground"
+                          }`}
+                        >
+                          {u.role}
+                        </span>
+                        <span className="text-[0.68rem] text-muted-foreground">
+                          {timeAgo(u.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

@@ -14,11 +14,8 @@ import {
   Activity,
   Zap,
   Radio,
-  BarChart3,
   ArrowRight,
-  TrendingUp,
   ShieldCheck,
-  Clock,
   Sparkles,
 } from "lucide-react";
 
@@ -138,18 +135,15 @@ export function DashboardPage() {
       };
     }
 
-    // Confidence sum
     const totalConf = reports.reduce((acc, r) => acc + (r.confidence || 0), 0);
     const avgConfidence = (totalConf / totalAnalyses) * 100;
 
-    // SNR sum
     const validSnrReports = reports.filter(
       (r) => typeof r.snr === "number" && !isNaN(r.snr)
     );
     const totalSnr = validSnrReports.reduce((acc, r) => acc + r.snr, 0);
     const avgSnr = validSnrReports.length > 0 ? totalSnr / validSnrReports.length : null;
 
-    // Most detected
     const counts: Record<string, number> = {};
     reports.forEach((r) => {
       const cls = r.classification || "Unknown";
@@ -165,7 +159,6 @@ export function DashboardPage() {
       }
     });
 
-    // Highest confidence report
     let highestConf = -1;
     let highestReport: DBReport | null = null;
     reports.forEach((r) => {
@@ -203,14 +196,11 @@ export function DashboardPage() {
       .sort((a, b) => b.count - a.count);
   }, [reports]);
 
-  // Activity over time (e.g. daily/recent bucket)
+  // Activity over time
   const activityData = useMemo<ActivityPoint[]>(() => {
     if (reports.length === 0) return [];
 
-    // Group by date (YYYY-MM-DD)
     const dateMap: Record<string, number> = {};
-
-    // Sort ascending for chronology
     const sorted = [...reports].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
@@ -260,7 +250,7 @@ export function DashboardPage() {
     });
   }, [reports]);
 
-  // Signal quality (average SNR) per modulation
+  // Signal quality per modulation
   const snrByModulation = useMemo(() => {
     return CANONICAL_MODS.map((mod) => {
       const matching = reports.filter(
@@ -281,12 +271,10 @@ export function DashboardPage() {
     });
   }, [reports]);
 
-  // Recent analyses (5 to 8 rows)
   const recentAnalyses = useMemo(() => {
     return reports.slice(0, 6);
   }, [reports]);
 
-  // Handle row click to inspect result
   const handleViewReport = (rep: DBReport) => {
     const raw = rep.raw_report || {};
     const analysisResponse: AnalysisResponse = {
@@ -338,10 +326,7 @@ export function DashboardPage() {
           {/* ---- Header Section ---- */}
           <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-signal animate-pulse" />
-                <p className="label-mono">SIGNAL INTELLIGENCE</p>
-              </div>
+              <p className="label-mono">SIGNAL INTELLIGENCE</p>
               <h1 className="mt-2 text-2xl sm:text-3xl font-normal tracking-[-0.02em] text-foreground">
                 Your Analysis Overview
               </h1>
@@ -353,7 +338,7 @@ export function DashboardPage() {
             <div className="flex items-center gap-3">
               <Link
                 to="/analyze"
-                className="hover-arrow inline-flex items-center gap-2 border border-signal/60 bg-signal/10 px-4 py-2 font-mono text-xs text-foreground transition-all hover:border-signal hover:bg-signal/20"
+                className="hover-arrow inline-flex items-center gap-2 border border-signal/60 bg-signal/10 px-4 py-2 font-mono text-xs text-foreground transition-all hover:border-signal hover:bg-signal/20 rounded-md"
               >
                 <span>+ Analyze New Signal</span>
                 <ArrowRight className="h-3 w-3 text-signal" />
@@ -364,15 +349,15 @@ export function DashboardPage() {
           <div className="rule-line mb-8" />
 
           {error && (
-            <div className="mb-8 border border-destructive/50 bg-destructive/10 p-4 font-mono text-xs text-destructive">
+            <div className="mb-8 floating-surface p-4 font-mono text-xs text-destructive border-destructive/50 bg-destructive/10">
               {error}
             </div>
           )}
 
-          {/* ---- Summary Cards (4 Columns) ---- */}
+          {/* ---- Summary Cards (4 Floating Cards) ---- */}
           <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {/* Card 1: Total Analyses */}
-            <div className="border border-border bg-surface/30 p-5 transition-colors hover:border-border-strong">
+            <div className="floating-surface floating-surface-hover p-5 transition-all">
               <div className="flex items-center justify-between">
                 <p className="label-mono">TOTAL ANALYSES</p>
                 <Activity className="h-4 w-4 text-muted-foreground" />
@@ -392,7 +377,7 @@ export function DashboardPage() {
             </div>
 
             {/* Card 2: Avg Confidence */}
-            <div className="border border-border bg-surface/30 p-5 transition-colors hover:border-border-strong">
+            <div className="floating-surface floating-surface-hover p-5 transition-all">
               <div className="flex items-center justify-between">
                 <p className="label-mono">AVG CONFIDENCE</p>
                 <ShieldCheck className="h-4 w-4 text-signal" />
@@ -414,7 +399,7 @@ export function DashboardPage() {
             </div>
 
             {/* Card 3: Most Detected */}
-            <div className="border border-border bg-surface/30 p-5 transition-colors hover:border-border-strong">
+            <div className="floating-surface floating-surface-hover p-5 transition-all">
               <div className="flex items-center justify-between">
                 <p className="label-mono">MOST DETECTED</p>
                 <Radio className="h-4 w-4 text-muted-foreground" />
@@ -434,7 +419,7 @@ export function DashboardPage() {
             </div>
 
             {/* Card 4: Avg SNR */}
-            <div className="border border-border bg-surface/30 p-5 transition-colors hover:border-border-strong">
+            <div className="floating-surface floating-surface-hover p-5 transition-all">
               <div className="flex items-center justify-between">
                 <p className="label-mono">AVG SNR</p>
                 <Zap className="h-4 w-4 text-muted-foreground" />
@@ -458,7 +443,7 @@ export function DashboardPage() {
 
           {/* ---- Empty State if no analyses ---- */}
           {!fetching && reports.length === 0 && (
-            <div className="mb-12 border border-dashed border-border/80 bg-surface/20 px-6 py-16 text-center">
+            <div className="mb-12 floating-surface p-12 text-center border-dashed">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background">
                 <Radio className="h-5 w-5 text-signal" />
               </div>
@@ -471,7 +456,7 @@ export function DashboardPage() {
               <div className="mt-6">
                 <Link
                   to="/analyze"
-                  className="hover-arrow inline-flex items-center gap-2 border border-border-strong bg-surface px-5 py-2.5 font-mono text-xs text-foreground transition-all hover:border-signal"
+                  className="hover-arrow inline-flex items-center gap-2 rounded-md border border-border-strong bg-surface px-5 py-2.5 font-mono text-xs text-foreground transition-all hover:border-signal"
                 >
                   <span>Run your first analysis</span>
                   <span className="arrow text-signal">→</span>
@@ -484,7 +469,7 @@ export function DashboardPage() {
           <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-12">
             <div className="lg:col-span-6">
               {fetching ? (
-                <div className="h-72 animate-pulse border border-border bg-surface/30 p-6" />
+                <div className="h-72 animate-pulse floating-surface p-6" />
               ) : (
                 <ModulationDonutChart
                   data={modulationDistribution}
@@ -497,7 +482,7 @@ export function DashboardPage() {
 
             <div className="lg:col-span-6">
               {fetching ? (
-                <div className="h-72 animate-pulse border border-border bg-surface/30 p-6" />
+                <div className="h-72 animate-pulse floating-surface p-6" />
               ) : (
                 <ActivityLineChart
                   data={activityData}
@@ -512,7 +497,7 @@ export function DashboardPage() {
           <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-12">
             <div className="lg:col-span-6">
               {fetching ? (
-                <div className="h-64 animate-pulse border border-border bg-surface/30 p-6" />
+                <div className="h-64 animate-pulse floating-surface p-6" />
               ) : (
                 <ConfidenceBarChart
                   data={confidenceByModulation}
@@ -524,7 +509,7 @@ export function DashboardPage() {
 
             <div className="lg:col-span-6">
               {fetching ? (
-                <div className="h-64 animate-pulse border border-border bg-surface/30 p-6" />
+                <div className="h-64 animate-pulse floating-surface p-6" />
               ) : (
                 <SignalQualityChart
                   data={snrByModulation}
@@ -535,9 +520,9 @@ export function DashboardPage() {
             </div>
           </div>
 
-          {/* ---- Quick Insights Strip ---- */}
+          {/* ---- Signal Insights Strip ---- */}
           {!fetching && reports.length > 0 && (
-            <div className="mb-8 border border-border bg-background/60 p-4">
+            <div className="mb-8 floating-surface p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="h-3.5 w-3.5 text-signal" />
                 <p className="label-mono">SIGNAL INSIGHTS</p>
@@ -581,8 +566,8 @@ export function DashboardPage() {
             </div>
           )}
 
-          {/* ---- Recent Analyses Section ---- */}
-          <div className="border border-border bg-surface/30 p-5">
+          {/* ---- Recent Analyses Floating Section ---- */}
+          <div className="floating-surface p-5">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <p className="label-mono">RECENT ANALYSES</p>
@@ -602,7 +587,7 @@ export function DashboardPage() {
             {fetching ? (
               <div className="space-y-2">
                 {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-12 animate-pulse bg-border/40" />
+                  <div key={i} className="h-12 animate-pulse rounded-lg bg-border/40" />
                 ))}
               </div>
             ) : recentAnalyses.length === 0 ? (
@@ -612,53 +597,36 @@ export function DashboardPage() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left font-mono text-xs">
-                  <thead>
-                    <tr className="border-b border-border text-muted-foreground text-[0.7rem]">
-                      <th className="py-2.5 pr-4 font-normal">FILENAME</th>
-                      <th className="py-2.5 pr-4 font-normal">MODULATION</th>
-                      <th className="py-2.5 pr-4 font-normal">CONFIDENCE</th>
-                      <th className="py-2.5 pr-4 font-normal">SNR</th>
-                      <th className="py-2.5 pr-4 font-normal">DATE</th>
-                      <th className="py-2.5 text-right font-normal">ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {recentAnalyses.map((rec) => (
-                      <tr
-                        key={rec.id}
-                        onClick={() => handleViewReport(rec)}
-                        className="group cursor-pointer transition-colors hover:bg-surface/80"
-                      >
-                        <td className="py-3 pr-4 font-medium text-foreground">
-                          <span className="block max-w-[220px] truncate">
-                            {rec.filename}
-                          </span>
-                        </td>
-                        <td className="py-3 pr-4">
-                          <span className="rounded-sm border border-signal/30 bg-signal/10 px-2 py-0.5 font-mono text-[0.7rem] text-signal font-semibold">
-                            {rec.classification}
-                          </span>
-                        </td>
-                        <td className="py-3 pr-4 text-foreground">
-                          {(rec.confidence * 100).toFixed(1)}%
-                        </td>
-                        <td className="py-3 pr-4 text-muted-foreground">
-                          {typeof rec.snr === "number" ? `${rec.snr.toFixed(1)} dB` : "—"}
-                        </td>
-                        <td className="py-3 pr-4 text-muted-foreground">
-                          {timeAgo(rec.created_at)}
-                        </td>
-                        <td className="py-3 text-right">
-                          <span className="inline-flex items-center gap-1 text-[0.72rem] text-muted-foreground group-hover:text-signal">
-                            View <span className="arrow font-mono text-signal">→</span>
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-1.5">
+                {recentAnalyses.map((rec) => (
+                  <div
+                    key={rec.id}
+                    onClick={() => handleViewReport(rec)}
+                    className="floating-row flex cursor-pointer items-center justify-between px-4 py-3 font-mono text-xs"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-medium text-foreground truncate max-w-[200px] sm:max-w-[280px]">
+                        {rec.filename}
+                      </span>
+                      <span className="rounded-sm border border-signal/30 bg-signal/10 px-2 py-0.5 text-[0.7rem] text-signal font-semibold shrink-0">
+                        {rec.classification}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-5 shrink-0">
+                      <span className="text-foreground hidden sm:inline">
+                        {(rec.confidence * 100).toFixed(1)}%
+                      </span>
+                      <span className="text-muted-foreground hidden md:inline">
+                        {typeof rec.snr === "number" ? `${rec.snr.toFixed(1)} dB` : "—"}
+                      </span>
+                      <span className="text-muted-foreground text-[0.7rem]">
+                        {timeAgo(rec.created_at)}
+                      </span>
+                      <span className="text-signal">→</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

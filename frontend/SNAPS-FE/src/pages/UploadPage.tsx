@@ -92,28 +92,26 @@ export function UploadPage() {
             {/* Engine status — compact */}
             <div className="mt-1 shrink-0">
               <span
-                className={`inline-flex items-center gap-1.5 font-mono text-[0.65rem] tracking-[0.12em] ${
-                  backendOnline === true
+                className={`inline-flex items-center gap-1.5 font-mono text-[0.65rem] tracking-[0.12em] ${backendOnline === true
                     ? "text-green-400"
                     : backendOnline === false
-                    ? "text-amber-400"
-                    : "text-muted-foreground"
-                }`}
+                      ? "text-amber-400"
+                      : "text-muted-foreground"
+                  }`}
               >
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    backendOnline === true
+                  className={`h-1.5 w-1.5 rounded-full ${backendOnline === true
                       ? "bg-green-400 animate-pulse"
                       : backendOnline === false
-                      ? "bg-amber-400"
-                      : "bg-muted-foreground/50"
-                  }`}
+                        ? "bg-amber-400"
+                        : "bg-muted-foreground/50"
+                    }`}
                 />
                 {backendOnline === true
                   ? "ENGINE READY"
                   : backendOnline === false
-                  ? "ENGINE OFFLINE"
-                  : "CONNECTING"}
+                    ? "ENGINE OFFLINE"
+                    : "CONNECTING"}
               </span>
             </div>
           </div>
@@ -130,13 +128,12 @@ export function UploadPage() {
                 <div className="flex flex-col items-center gap-1">
                   <span className="label-mono text-[0.58rem]">{stage}</span>
                   <span
-                    className={`font-mono text-[0.6rem] tracking-widest ${
-                      isReady && stage === "INPUT"
+                    className={`font-mono text-[0.6rem] tracking-widest ${isReady && stage === "INPUT"
                         ? "text-green-400"
                         : backendOnline === true
-                        ? "text-signal"
-                        : "text-muted-foreground/40"
-                    }`}
+                          ? "text-signal"
+                          : "text-muted-foreground/40"
+                      }`}
                   >
                     {isReady && stage === "INPUT" ? "LOADED" : "READY"}
                   </span>
@@ -153,43 +150,33 @@ export function UploadPage() {
             <button
               type="button"
               onClick={() => { setActiveTab("upload"); setSelectedSample(null); }}
-              className={`pb-3 pr-6 font-mono text-[0.72rem] tracking-widest uppercase transition-colors ${
-                activeTab === "upload"
+              className={`pb-3 pr-6 font-mono text-[0.72rem] tracking-widest uppercase transition-colors ${activeTab === "upload"
                   ? "border-b-2 border-signal text-foreground"
                   : "text-muted-foreground hover:text-foreground"
-              }`}
+                }`}
             >
               Upload
             </button>
             <button
               type="button"
               onClick={() => { setActiveTab("samples"); setFile(null); }}
-              className={`pb-3 pr-6 font-mono text-[0.72rem] tracking-widest uppercase transition-colors ${
-                activeTab === "samples"
+              className={`pb-3 pr-6 font-mono text-[0.72rem] tracking-widest uppercase transition-colors ${activeTab === "samples"
                   ? "border-b-2 border-signal text-foreground"
                   : "text-muted-foreground hover:text-foreground"
-              }`}
+                }`}
             >
               Dataset ({samples.length})
             </button>
           </div>
 
-          {/* Tab: Upload — glassmorphic dropzone */}
+          {/* Tab: Upload — floating dropzone */}
           {activeTab === "upload" && (
             <div>
               {file ? (
                 <FileInfoCard file={file} onRemove={handleRemove} />
               ) : (
-                <div
-                  className="relative border border-border/70 bg-surface/30 backdrop-blur-md"
-                  style={{
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.14)",
-                  }}
-                >
-                  {/* Subtle inner highlight */}
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border-strong/60 to-transparent" />
+                <div className="relative floating-surface p-2">
                   <FileUploader onFileSelected={handleFileSelected} />
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-border/40 to-transparent" />
                 </div>
               )}
             </div>
@@ -231,11 +218,10 @@ export function UploadPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") handleSelectSample(s);
                       }}
-                      className={`cursor-pointer border p-3 transition-all ${
-                        isSelected
-                          ? "border-signal bg-signal/8"
-                          : "border-border bg-background/30 hover:border-border-strong"
-                      }`}
+                      className={`cursor-pointer floating-surface floating-surface-hover p-3.5 transition-all ${isSelected
+                          ? "!border-signal bg-signal/10"
+                          : ""
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-mono text-[0.75rem] font-medium text-foreground">
@@ -284,10 +270,10 @@ export function UploadPage() {
               style={
                 isReady
                   ? {
-                      backgroundColor: "var(--foreground)",
-                      color: "var(--background)",
-                      borderColor: "var(--foreground)",
-                    }
+                    backgroundColor: "var(--foreground)",
+                    color: "var(--background)",
+                    borderColor: "var(--foreground)",
+                  }
                   : {}
               }
             >

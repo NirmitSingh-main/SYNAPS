@@ -3,6 +3,7 @@ import {
   Outlet,
   createRootRouteWithContext,
 } from "@tanstack/react-router";
+import { CopilotButton } from "@/components/copilot/CopilotButton";
 
 function NotFoundComponent() {
   return (
@@ -37,6 +38,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
+      <CopilotButton />
     </QueryClientProvider>
   );
 }

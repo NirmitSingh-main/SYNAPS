@@ -14,13 +14,13 @@ interface ModulationDonutChartProps {
 }
 
 const COLOR_MAP: Record<string, string> = {
-  BPSK: "#38bdf8", // Sky blue
-  QPSK: "#818cf8", // Indigo
-  FSK: "#34d399",  // Emerald
-  QAM16: "#f472b6", // Pink
-  QAM64: "#fb923c", // Orange
-  AM: "#a78bfa",    // Violet
-  FM: "#fbbf24",    // Amber
+  BPSK: "#38bdf8",
+  QPSK: "#818cf8",
+  FSK: "#34d399",
+  QAM16: "#f472b6",
+  QAM64: "#fb923c",
+  AM: "#a78bfa",
+  FM: "#fbbf24",
 };
 
 const DEFAULT_COLORS = [
@@ -48,7 +48,7 @@ export function ModulationDonutChart({
     endAngle: number;
   })[] = [];
 
-  let accumulatedAngle = -90; // Start at top
+  let accumulatedAngle = -90;
 
   data.forEach((item, index) => {
     const percentage = total > 0 ? (item.count / total) * 100 : 0;
@@ -98,7 +98,6 @@ export function ModulationDonutChart({
     startAngle: number,
     endAngle: number
   ) {
-    // If it's a full circle or close to it
     const sweep = endAngle - startAngle;
     const clampedEndAngle = sweep >= 359.99 ? startAngle + 359.99 : endAngle;
 
@@ -119,7 +118,7 @@ export function ModulationDonutChart({
   }
 
   return (
-    <div className="flex h-full flex-col justify-between border border-border bg-surface/30 p-5">
+    <div className="floating-surface p-5 h-full flex flex-col justify-between">
       <div>
         <div className="flex items-center justify-between">
           <p className="label-mono">{title}</p>
@@ -206,7 +205,7 @@ export function ModulationDonutChart({
                 key={slice.label}
                 onMouseEnter={() => setHoveredIndex(i)}
                 onMouseLeave={() => setHoveredIndex(null)}
-                className={`flex cursor-pointer items-center justify-between rounded-sm border px-2.5 py-1.5 transition-all ${
+                className={`flex cursor-pointer items-center justify-between rounded-lg border px-2.5 py-1.5 transition-all ${
                   hoveredIndex === i
                     ? "border-border-strong bg-surface/80"
                     : "border-transparent hover:bg-surface/50"

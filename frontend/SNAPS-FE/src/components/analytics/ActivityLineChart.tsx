@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 export interface ActivityPoint {
-  date: string; // formatted label e.g., "Sep 20" or "09/20"
+  date: string;
   fullDate?: string;
   count: number;
 }
@@ -30,7 +30,6 @@ export function ActivityLineChart({
   const chartHeight = height - padTop - padBottom;
 
   const maxCount = Math.max(...data.map((d) => d.count), 1);
-  // Nice y-max step
   const yMax = Math.max(Math.ceil(maxCount * 1.2), 4);
 
   const points = data.map((d, i) => {
@@ -42,7 +41,6 @@ export function ActivityLineChart({
     return { x, y, ...d };
   });
 
-  // SVG path string
   const linePath =
     points.length > 0
       ? points.reduce(
@@ -61,7 +59,7 @@ export function ActivityLineChart({
   const totalActivity = data.reduce((acc, d) => acc + d.count, 0);
 
   return (
-    <div className="flex h-full flex-col justify-between border border-border bg-surface/30 p-5">
+    <div className="floating-surface p-5 h-full flex flex-col justify-between">
       <div>
         <div className="flex items-center justify-between">
           <p className="label-mono">{title}</p>
@@ -139,7 +137,6 @@ export function ActivityLineChart({
               const isHovered = hoveredIndex === i;
               return (
                 <g key={i}>
-                  {/* Invisible larger hover area */}
                   <circle
                     cx={p.x}
                     cy={p.y}
@@ -149,7 +146,6 @@ export function ActivityLineChart({
                     onMouseEnter={() => setHoveredIndex(i)}
                     onMouseLeave={() => setHoveredIndex(null)}
                   />
-                  {/* Visual point */}
                   <circle
                     cx={p.x}
                     cy={p.y}
@@ -163,7 +159,7 @@ export function ActivityLineChart({
               );
             })}
 
-            {/* X-axis date labels (sampled for clarity) */}
+            {/* X-axis date labels */}
             {points
               .filter((_, idx) => {
                 if (points.length <= 6) return true;
@@ -186,7 +182,7 @@ export function ActivityLineChart({
           {/* Floating Tooltip */}
           {hoveredIndex !== null && points[hoveredIndex] && (
             <div
-              className="pointer-events-none absolute -top-2 transform -translate-x-1/2 -translate-y-full rounded border border-border-strong bg-background/95 px-2.5 py-1.5 shadow-md backdrop-blur-sm"
+              className="pointer-events-none absolute -top-2 transform -translate-x-1/2 -translate-y-full rounded-lg border border-border-strong bg-background/95 px-2.5 py-1.5 shadow-md backdrop-blur-sm"
               style={{
                 left: `${(points[hoveredIndex].x / width) * 100}%`,
               }}

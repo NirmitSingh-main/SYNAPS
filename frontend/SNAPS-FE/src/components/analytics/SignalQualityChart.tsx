@@ -2,7 +2,7 @@ import { useState } from "react";
 
 export interface SignalQualityItem {
   label: string;
-  avgSnr: number | null; // in dB e.g. 17.3 or null
+  avgSnr: number | null;
   sampleCount: number;
 }
 
@@ -23,7 +23,7 @@ export function SignalQualityChart({
   const maxSnr = validItems.length > 0 ? Math.max(...validItems.map((d) => d.avgSnr!), 20) : 30;
 
   return (
-    <div className="flex h-full flex-col justify-between border border-border bg-surface/30 p-5">
+    <div className="floating-surface p-5 h-full flex flex-col justify-between">
       <div>
         <p className="label-mono">{title}</p>
         <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
@@ -42,7 +42,6 @@ export function SignalQualityChart({
             const hasVal = item.avgSnr !== null && item.sampleCount > 0;
             const snrVal = hasVal ? item.avgSnr! : null;
 
-            // Compute relative gauge percentage
             const pct = snrVal !== null ? Math.min(100, Math.max(8, (snrVal / maxSnr) * 100)) : 0;
 
             return (
@@ -50,7 +49,7 @@ export function SignalQualityChart({
                 key={item.label}
                 onMouseEnter={() => setHoveredIdx(idx)}
                 onMouseLeave={() => setHoveredIdx(null)}
-                className={`relative flex flex-col justify-between border p-3 transition-all ${
+                className={`relative flex flex-col justify-between rounded-lg border p-3 transition-all ${
                   isHovered
                     ? "border-border-strong bg-surface/80 shadow-sm"
                     : "border-border bg-background/50"

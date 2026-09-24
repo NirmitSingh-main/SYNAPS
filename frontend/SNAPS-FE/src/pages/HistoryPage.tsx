@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { setAnalysisData } from "@/lib/analysisStore";
 import { type AnalysisResponse } from "@/services/api";
-import { Search, Filter, ArrowUpDown, Radio, ArrowRight } from "lucide-react";
+import { Search, ArrowUpDown, Radio, ArrowRight } from "lucide-react";
 
 interface DBAnalysisRecord {
   id: string;
@@ -60,7 +60,6 @@ export function HistoryPage() {
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters and search
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMod, setSelectedMod] = useState("ALL");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "confidence" | "snr">("newest");
@@ -96,7 +95,6 @@ export function HistoryPage() {
     };
   }, [user, loading, navigate]);
 
-  // Filtered & Sorted records
   const filteredRecords = useMemo(() => {
     return records
       .filter((rec) => {
@@ -188,7 +186,7 @@ export function HistoryPage() {
 
             <Link
               to="/analyze"
-              className="hover-arrow inline-flex items-center gap-2 border border-signal/60 bg-signal/10 px-4 py-2 font-mono text-xs text-foreground transition-all hover:border-signal hover:bg-signal/20 shrink-0"
+              className="hover-arrow inline-flex items-center gap-2 border border-signal/60 bg-signal/10 px-4 py-2 font-mono text-xs text-foreground transition-all hover:border-signal hover:bg-signal/20 rounded-md shrink-0"
             >
               <span>Analyze Signal</span>
               <span className="arrow text-signal">→</span>
@@ -197,7 +195,7 @@ export function HistoryPage() {
 
           <div className="rule-line mb-8" />
 
-          {/* Controls Bar: Search & Filters */}
+          {/* Controls Bar */}
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             {/* Search Box */}
             <div className="relative w-full sm:w-72">
@@ -207,7 +205,7 @@ export function HistoryPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by filename or modulation..."
-                className="w-full border border-border bg-surface/40 py-2 pl-9 pr-4 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-border-strong focus:outline-none"
+                className="w-full rounded-lg border border-border bg-surface/40 py-2 pl-9 pr-4 font-mono text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-border-strong focus:outline-none"
               />
             </div>
 
@@ -219,7 +217,7 @@ export function HistoryPage() {
                     key={mod}
                     type="button"
                     onClick={() => setSelectedMod(mod)}
-                    className={`px-2.5 py-1 font-mono text-[0.7rem] transition-colors rounded-xs ${
+                    className={`px-2.5 py-1 font-mono text-[0.7rem] transition-colors rounded-md ${
                       selectedMod === mod
                         ? "bg-signal text-primary-foreground font-semibold"
                         : "border border-border bg-surface/30 text-muted-foreground hover:border-border-strong hover:text-foreground"
@@ -231,7 +229,7 @@ export function HistoryPage() {
               </div>
 
               {/* Sort Selector */}
-              <div className="flex items-center gap-1.5 border border-border bg-surface/30 px-2.5 py-1">
+              <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface/30 px-2.5 py-1">
                 <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
                 <select
                   value={sortBy}
@@ -255,22 +253,22 @@ export function HistoryPage() {
             </div>
           </div>
 
-          {/* Records List / Table */}
+          {/* Records Floating List */}
           {fetching ? (
             <div className="space-y-3">
               {[...Array(6)].map((_, i) => (
                 <div
                   key={i}
-                  className="h-16 animate-pulse border border-border bg-surface/30"
+                  className="h-16 animate-pulse floating-surface"
                 />
               ))}
             </div>
           ) : error ? (
-            <div className="border border-destructive/40 bg-destructive/10 p-4 font-mono text-xs text-destructive">
+            <div className="floating-surface p-4 font-mono text-xs text-destructive border-destructive/40 bg-destructive/10">
               {error}
             </div>
           ) : records.length === 0 ? (
-            <div className="border border-dashed border-border/80 bg-surface/20 px-6 py-20 text-center">
+            <div className="floating-surface p-16 text-center border-dashed">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background">
                 <Radio className="h-5 w-5 text-signal" />
               </div>
@@ -283,7 +281,7 @@ export function HistoryPage() {
               <div className="mt-6">
                 <Link
                   to="/analyze"
-                  className="hover-arrow inline-flex items-center gap-2 border border-border-strong bg-surface px-5 py-2.5 font-mono text-xs text-foreground transition-all hover:border-signal"
+                  className="hover-arrow inline-flex items-center gap-2 rounded-md border border-border-strong bg-surface px-5 py-2.5 font-mono text-xs text-foreground transition-all hover:border-signal"
                 >
                   <span>Analyze Signal</span>
                   <span className="arrow text-signal">→</span>
@@ -291,7 +289,7 @@ export function HistoryPage() {
               </div>
             </div>
           ) : filteredRecords.length === 0 ? (
-            <div className="border border-dashed border-border px-6 py-12 text-center">
+            <div className="floating-surface p-12 text-center border-dashed">
               <p className="font-mono text-xs text-muted-foreground">
                 No analyses match the filter "{selectedMod}" or search query "{searchQuery}".
               </p>
@@ -307,92 +305,44 @@ export function HistoryPage() {
               </button>
             </div>
           ) : (
-            <div className="border border-border bg-surface/30">
-              {/* Desktop View Table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left font-mono text-xs">
-                  <thead>
-                    <tr className="border-b border-border bg-background/50 text-[0.7rem] text-muted-foreground">
-                      <th className="py-3 px-4 font-normal">FILENAME</th>
-                      <th className="py-3 px-4 font-normal">MODULATION</th>
-                      <th className="py-3 px-4 font-normal">CONFIDENCE</th>
-                      <th className="py-3 px-4 font-normal">SNR</th>
-                      <th className="py-3 px-4 font-normal">DATE</th>
-                      <th className="py-3 px-4 text-right font-normal">ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {filteredRecords.map((rec) => (
-                      <tr
-                        key={rec.id}
-                        onClick={() => handleViewRecord(rec)}
-                        className="group cursor-pointer transition-colors hover:bg-surface/80"
-                      >
-                        <td className="py-3.5 px-4 font-medium text-foreground">
-                          <span className="block max-w-[240px] truncate">
-                            {rec.filename}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className="rounded-sm border border-signal/30 bg-signal/10 px-2 py-0.5 font-mono text-[0.7rem] text-signal font-semibold">
-                            {rec.classification}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-foreground">
-                          {(rec.confidence * 100).toFixed(1)}%
-                        </td>
-                        <td className="py-3.5 px-4 text-muted-foreground">
-                          {typeof rec.snr === "number" ? `${rec.snr.toFixed(1)} dB` : "—"}
-                        </td>
-                        <td className="py-3.5 px-4 text-muted-foreground">
-                          {timeAgo(rec.created_at)}
-                        </td>
-                        <td className="py-3.5 px-4 text-right">
-                          <span className="inline-flex items-center gap-1 font-mono text-[0.72rem] text-signal font-medium group-hover:underline">
-                            View <span className="arrow font-mono">→</span>
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile Card List View */}
-              <div className="divide-y divide-border/40 md:hidden">
+            <div className="floating-surface p-4 sm:p-5">
+              <div className="space-y-1.5">
                 {filteredRecords.map((rec) => (
                   <div
                     key={rec.id}
                     onClick={() => handleViewRecord(rec)}
-                    className="cursor-pointer p-4 transition-colors hover:bg-surface/80"
+                    className="floating-row flex cursor-pointer items-center justify-between px-4 py-3 font-mono text-xs"
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="min-w-0">
-                        <p className="truncate font-mono text-xs font-semibold text-foreground">
+                        <span className="font-medium text-foreground block truncate max-w-[180px] sm:max-w-[320px]">
                           {rec.filename}
-                        </p>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                          <span className="rounded-sm border border-signal/30 bg-signal/10 px-1.5 py-0.5 font-mono text-[0.65rem] text-signal font-semibold">
-                            {rec.classification}
-                          </span>
-                          <span className="font-mono text-[0.68rem] text-foreground">
-                            {(rec.confidence * 100).toFixed(1)}%
-                          </span>
-                          <span className="text-muted-foreground">·</span>
-                          <span className="font-mono text-[0.68rem] text-muted-foreground">
-                            {typeof rec.snr === "number" ? `${rec.snr.toFixed(1)} dB` : "—"}
-                          </span>
+                        </span>
+                        <div className="mt-0.5 flex items-center gap-2 sm:hidden text-[0.68rem] text-muted-foreground">
+                          <span>{(rec.confidence * 100).toFixed(1)}%</span>
+                          <span>·</span>
+                          <span>{typeof rec.snr === "number" ? `${rec.snr.toFixed(1)} dB` : "—"}</span>
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0">
-                        <span className="block font-mono text-[0.65rem] text-muted-foreground">
-                          {timeAgo(rec.created_at)}
-                        </span>
-                        <span className="mt-2 inline-flex items-center gap-1 font-mono text-xs text-signal font-medium">
-                          View →
-                        </span>
-                      </div>
+                      <span className="rounded-sm border border-signal/30 bg-signal/10 px-2 py-0.5 text-[0.7rem] text-signal font-semibold shrink-0">
+                        {rec.classification}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-5 shrink-0">
+                      <span className="text-foreground hidden sm:inline">
+                        {(rec.confidence * 100).toFixed(1)}%
+                      </span>
+                      <span className="text-muted-foreground hidden md:inline">
+                        {typeof rec.snr === "number" ? `${rec.snr.toFixed(1)} dB` : "—"}
+                      </span>
+                      <span className="text-muted-foreground text-[0.7rem]">
+                        {timeAgo(rec.created_at)}
+                      </span>
+                      <span className="text-xs font-medium text-signal group-hover:underline inline-flex items-center gap-0.5">
+                        View <span className="arrow font-mono">→</span>
+                      </span>
                     </div>
                   </div>
                 ))}

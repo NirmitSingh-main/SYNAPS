@@ -10,6 +10,7 @@ import { Spectrogram } from "@/components/Spectrogram";
 import { FeatureTable } from "@/components/FeatureTable";
 import { PredictionChart } from "@/components/PredictionChart";
 import { ExplanationPanel } from "@/components/ExplanationPanel";
+import { PrintReport } from "@/components/report/PrintReport";
 import { demoAnalysis } from "@/data/demoData";
 import {
   getAnalysisData,
@@ -154,7 +155,8 @@ export function ResultsPage() {
 
   return (
     <ThemeProvider>
-      <div className="relative min-h-screen">
+      {/* Screen Interactive UI */}
+      <div className="screen-only-view relative min-h-screen">
         <Header />
 
         <main className="mx-auto max-w-4xl px-6 pb-32 pt-32">
@@ -171,7 +173,7 @@ export function ResultsPage() {
               {/* Status badge */}
               <div className="shrink-0">
                 <span
-                  className={`inline-block border px-4 py-2 font-mono text-[0.65rem] tracking-[0.14em] ${isLive
+                  className={`inline-block rounded-full border px-4 py-2 font-mono text-[0.65rem] tracking-[0.14em] ${isLive
                     ? "border-green-500/40 text-green-400 bg-green-500/10"
                     : "border-dashed border-border-strong text-muted-foreground"
                     }`}
@@ -216,7 +218,7 @@ export function ResultsPage() {
 
           {/* ---- Bit Recovery & Component Analysis ---- */}
           {data.bitRecovery && (
-            <div className="mt-6 border border-border bg-background p-6">
+            <div className="mt-6 floating-surface p-6">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-4">
                 <p className="label-mono">
                   {data.signalType === "MIXED"
@@ -225,11 +227,11 @@ export function ResultsPage() {
                 </p>
                 <span
                   className={`font-mono text-[0.68rem] px-2.5 py-1 border ${data.bitRecovery.validation_status === "VALIDATED"
-                      ? "border-green-500/40 text-green-400 bg-green-500/10"
-                      : (data.bitRecovery.validation_status === "Component bit recovery not validated"
-                        || data.bitRecovery.validation_status === "COMPONENT_RECOVERY_NOT_VALIDATED")
-                        ? "border-signal/40 text-signal bg-signal/10"
-                        : "border-border text-muted-foreground"
+                    ? "border-green-500/40 text-green-400 bg-green-500/10"
+                    : (data.bitRecovery.validation_status === "Component bit recovery not validated"
+                      || data.bitRecovery.validation_status === "COMPONENT_RECOVERY_NOT_VALIDATED")
+                      ? "border-signal/40 text-signal bg-signal/10"
+                      : "border-border text-muted-foreground"
                     }`}
                 >
                   {data.bitRecovery.validation_status}
@@ -373,7 +375,7 @@ export function ResultsPage() {
             <button
               type="button"
               onClick={() => window.print()}
-              className="border border-border px-4 py-2 font-mono text-[0.75rem] text-muted-foreground transition-colors duration-200 hover:border-foreground hover:text-foreground"
+              className="border border-border rounded-lg px-4 py-2 font-mono text-[0.75rem] text-muted-foreground transition-colors duration-200 hover:border-foreground hover:text-foreground"
             >
               Export report
             </button>
@@ -381,6 +383,14 @@ export function ResultsPage() {
         </main>
         <Footer />
       </div>
+
+      {/* Dedicated Print Report UI (shown only when printing / saving as PDF) */}
+      <PrintReport
+        data={data}
+        file={file}
+        sampleId={sampleId}
+        isLive={isLive}
+      />
     </ThemeProvider>
   );
 }

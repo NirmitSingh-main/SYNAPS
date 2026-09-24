@@ -20,7 +20,7 @@ export function FileInfoCard({ file, onRemove }: FileInfoCardProps) {
   const format = getFormat(file.name);
 
   return (
-    <div className="border border-border bg-background">
+    <div className="floating-surface overflow-hidden">
       {/* Card header */}
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <span className="label-mono">File selected</span>

@@ -121,7 +121,7 @@ export function Spectrogram({
     : "time × frequency";
 
   return (
-    <div className="border border-border bg-background">
+    <div className="floating-surface overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <p className="label-mono">Spectrogram</p>
 

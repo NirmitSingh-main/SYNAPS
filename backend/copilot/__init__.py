@@ -1,0 +1,3 @@
+"""
+SYNAPS Copilot — backend package.
+"""

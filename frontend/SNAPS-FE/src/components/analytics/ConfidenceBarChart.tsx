@@ -2,7 +2,7 @@ import { useState } from "react";
 
 export interface ConfidenceBarItem {
   label: string;
-  avgConfidence: number | null; // e.g. 94.5 (percentage) or null if no data
+  avgConfidence: number | null;
   sampleCount: number;
 }
 
@@ -22,7 +22,7 @@ export function ConfidenceBarChart({
   const hasAnyData = data.some((d) => d.avgConfidence !== null && d.sampleCount > 0);
 
   return (
-    <div className="flex h-full flex-col justify-between border border-border bg-surface/30 p-5">
+    <div className="floating-surface p-5 h-full flex flex-col justify-between">
       <div>
         <p className="label-mono">{title}</p>
         <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
@@ -46,7 +46,7 @@ export function ConfidenceBarChart({
                 key={item.label}
                 onMouseEnter={() => setHoveredIdx(idx)}
                 onMouseLeave={() => setHoveredIdx(null)}
-                className={`relative rounded-sm p-1.5 transition-colors ${
+                className={`relative rounded-lg p-1.5 transition-colors ${
                   isHovered ? "bg-surface/70" : ""
                 }`}
               >
