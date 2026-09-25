@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api.signal import router as signal_router
 from backend.api.analysis import router as analysis_router
 from backend.api.report import router as report_router
+from backend.api.copilot import router as copilot_router
 from backend.schemas.response import HealthResponse
 from backend.services.pipeline import default_pipeline
 
@@ -30,6 +31,7 @@ app.add_middleware(
 app.include_router(signal_router)
 app.include_router(analysis_router)
 app.include_router(report_router)
+app.include_router(copilot_router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["Health"])

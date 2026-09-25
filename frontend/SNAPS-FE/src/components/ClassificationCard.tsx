@@ -17,7 +17,7 @@ export function ClassificationCard({
   const isMixed = classification === "MIXED" || signalType === "MIXED";
 
   return (
-    <div className="border border-border bg-background">
+    <div className="floating-surface overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <p className="label-mono">
@@ -32,7 +32,7 @@ export function ClassificationCard({
 
       {/* Classification result */}
       <div className="px-6 py-6">
-        <div className="flex flex-wrap items-center justify-between gap-2 border border-dashed border-border-strong px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-border-strong px-5 py-4">
           <p className="text-[1.05rem] font-medium text-foreground">
             {classification}
           </p>
