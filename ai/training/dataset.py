@@ -22,14 +22,26 @@ class IQSignalDataset(Dataset):
     """
     Dataset for modulation classification.
 
-    Loads IQ files and converts them into
-    [I, Q, magnitude, phase, diff_phase_cos, diff_phase_sin] features tokenized into NUM_TOKENS windows.
+    Supports representations:
+        - "tokens": [mean_I, mean_Q, mag, phase, cos, sin, ...] tokenized into NUM_TOKENS windows.
+        - "raw_iq": (5, max_length) raw normalized continuous waveform.
+        - "synchronized_symbols": (8, max_symbols) synchronized symbol-center representation.
 
     Supports 5 classes: BPSK, QPSK, FSK, QAM16, MIXED.
     """
 
-    def __init__(self, root=None, num_tokens=NUM_TOKENS):
+    def __init__(
+        self,
+        root=None,
+        num_tokens=NUM_TOKENS,
+        representation: str = "tokens",
+        max_length: int = 9600,
+        max_symbols: int = 1024,
+    ):
         self.num_tokens = num_tokens
+        self.representation = representation
+        self.max_length = max_length
+        self.max_symbols = max_symbols
 
         self.samples = []
 
@@ -62,12 +74,42 @@ class IQSignalDataset(Dataset):
         iq_file, label = self.samples[index]
 
         iq = load_iq_file(iq_file)
-        features = prepare_iq_features(iq)
-        tokens = tokenize_signal_features(features, num_tokens=self.num_tokens)
 
-        x = torch.tensor(tokens, dtype=torch.float32)
+        if self.representation == "synchronized_symbols":
+            from ai.features.learned_features import prepare_synchronized_symbol_features
+            tensor = prepare_synchronized_symbol_features(iq, max_symbols=self.max_symbols, num_channels=8)
+            x = torch.tensor(tensor, dtype=torch.float32)
+        elif self.representation == "raw_iq":
+            if len(iq) < self.max_length:
+                iq_pad = np.pad(iq, (0, self.max_length - len(iq)), mode="constant")
+            else:
+                iq_pad = iq[:self.max_length]
+            i_val = np.real(iq_pad).astype(np.float32)
+            q_val = np.imag(iq_pad).astype(np.float32)
+            mag_val = np.abs(iq_pad).astype(np.float32)
+            scale = float(np.sqrt(np.mean(mag_val ** 2)))
+            if scale > 1e-12:
+                i_val /= scale
+                q_val /= scale
+                mag_val /= scale
+            diff_cos = np.ones(self.max_length, dtype=np.float32)
+            diff_sin = np.zeros(self.max_length, dtype=np.float32)
+            if len(iq_pad) > 1:
+                prod = iq_pad[1:] * np.conj(iq_pad[:-1])
+                pmag = np.abs(prod).astype(np.float32)
+                valid = pmag > 1e-12
+                unit = np.zeros(len(prod), dtype=np.complex64)
+                unit[valid] = prod[valid] / pmag[valid]
+                diff_cos[1:] = np.nan_to_num(np.real(unit), nan=0.0, posinf=0.0, neginf=0.0)
+                diff_sin[1:] = np.nan_to_num(np.imag(unit), nan=0.0, posinf=0.0, neginf=0.0)
+            raw_arr = np.stack([i_val, q_val, mag_val, diff_cos, diff_sin], axis=0)
+            x = torch.tensor(raw_arr, dtype=torch.float32)
+        else:
+            features = prepare_iq_features(iq)
+            tokens = tokenize_signal_features(features, num_tokens=self.num_tokens)
+            x = torch.tensor(tokens, dtype=torch.float32)
+
         y = torch.tensor(label, dtype=torch.long)
-
         return x, y
 
 

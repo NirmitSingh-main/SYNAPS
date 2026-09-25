@@ -56,18 +56,31 @@ def load_model(model_path=None):
         weights_only=False,
     )
 
-    in_features = 5
-    if isinstance(checkpoint, dict) and "input_features" in checkpoint:
-        in_features = checkpoint["input_features"]
-    elif isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-        in_proj_w = checkpoint["model_state_dict"].get("input_projection.weight")
-        if in_proj_w is not None:
-            in_features = in_proj_w.shape[1]
+    from ai.models.multi_branch import MultiBranchSignalClassifier
 
-    model = SignalTransformer(
-        input_features=in_features,
-        num_classes=NUM_CLASSES,
-    )
+    in_features = 5
+    arch = "SignalTransformer"
+    if isinstance(checkpoint, dict):
+        if "input_features" in checkpoint:
+            in_features = checkpoint["input_features"]
+        if "model_architecture" in checkpoint:
+            arch = checkpoint["model_architecture"]
+        elif "model_state_dict" in checkpoint:
+            if "fusion_head.0.weight" in checkpoint["model_state_dict"]:
+                arch = "MultiBranchSignalClassifier"
+            elif "input_projection.weight" in checkpoint["model_state_dict"]:
+                in_features = checkpoint["model_state_dict"]["input_projection.weight"].shape[1]
+
+    if arch == "MultiBranchSignalClassifier":
+        model = MultiBranchSignalClassifier(
+            input_channels=in_features,
+            num_classes=NUM_CLASSES,
+        )
+    else:
+        model = SignalTransformer(
+            input_features=in_features,
+            num_classes=NUM_CLASSES,
+        )
 
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         model.load_state_dict(checkpoint["model_state_dict"])
@@ -234,17 +247,50 @@ def predict(filepath):
     if sample_rate is not None:
         print("Sample rate:", sample_rate)
 
-    features = prepare_features(iq)
+    if getattr(model, "use_conv_frontend", False) or model.input_features in (2, 3, 5):
+        target_len = max(len(iq), 9600)
+        if len(iq) < target_len:
+            pad_len = target_len - len(iq)
+            iq_padded = np.pad(iq, (0, pad_len), mode="constant")
+        else:
+            iq_padded = iq[:target_len]
 
-    print("Feature shape:", features.shape)
+        i = np.real(iq_padded).astype(np.float32)
+        q = np.imag(iq_padded).astype(np.float32)
+        mag = np.abs(iq_padded).astype(np.float32)
+        scale = float(np.sqrt(np.mean(mag ** 2)))
+        if scale > 1e-12 and np.isfinite(scale):
+            i = i / scale
+            q = q / scale
+            mag = mag / scale
 
-    if features.shape[-1] > model.input_features:
-        features = features[:, :model.input_features]
+        diff_cos = np.ones(target_len, dtype=np.float32)
+        diff_sin = np.zeros(target_len, dtype=np.float32)
+        if len(iq_padded) > 1:
+            prod = iq_padded[1:] * np.conj(iq_padded[:-1])
+            prod_mag = np.abs(prod).astype(np.float32)
+            valid = prod_mag > 1e-12
+            unit_phasor = np.zeros(len(prod), dtype=np.complex64)
+            unit_phasor[valid] = prod[valid] / prod_mag[valid]
+            diff_cos[1:] = np.nan_to_num(np.real(unit_phasor), nan=0.0, posinf=0.0, neginf=0.0)
+            diff_sin[1:] = np.nan_to_num(np.imag(unit_phasor), nan=0.0, posinf=0.0, neginf=0.0)
 
-    x = torch.tensor(
-        features,
-        dtype=torch.float32
-    ).unsqueeze(0).to(device)
+        if model.input_features == 5:
+            raw_tensor = np.stack([i, q, mag, diff_cos, diff_sin], axis=0)
+        elif model.input_features == 3:
+            power = i ** 2 + q ** 2
+            raw_tensor = np.stack([i, q, power], axis=0)
+        else:
+            raw_tensor = np.stack([i, q], axis=0)
+
+        print("Feature shape (raw IQ):", raw_tensor.shape)
+        x = torch.tensor(raw_tensor, dtype=torch.float32).unsqueeze(0).to(device)
+    else:
+        features = prepare_features(iq)
+        print("Feature shape (tokens):", features.shape)
+        if features.shape[-1] > model.input_features:
+            features = features[:, :model.input_features]
+        x = torch.tensor(features, dtype=torch.float32).unsqueeze(0).to(device)
 
     with torch.no_grad():
         output = model(x)

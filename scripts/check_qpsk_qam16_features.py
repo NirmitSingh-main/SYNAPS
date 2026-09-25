@@ -1,0 +1,49 @@
+import glob
+import numpy as np
+
+from ai.preprocessing.iq_loader import load_iq_file
+from ai.features.learned_features import (
+    prepare_iq_features,
+    tokenize_signal_features,
+)
+
+
+def analyze_class(name, pattern):
+    files = sorted(glob.glob(pattern))[:75]
+
+    mean_mag = []
+    std_mag = []
+    ptp_mag = []
+
+    for path in files:
+        iq = load_iq_file(path)
+
+        features = prepare_iq_features(iq)
+        tokens = tokenize_signal_features(features)
+
+        mean_mag.append(tokens[:, 2].mean())
+        std_mag.append(tokens[:, 6].mean())
+        ptp_mag.append(tokens[:, 9].mean())
+
+    print(f"\n{name}")
+    print("-" * 40)
+    print(f"Files:     {len(files)}")
+    print(f"Mean mag:  {np.mean(mean_mag):.6f}")
+    print(f"Std mag:   {np.mean(std_mag):.6f}")
+    print(f"PTP mag:   {np.mean(ptp_mag):.6f}")
+
+    print("\nAcross-signal variation:")
+    print(f"Mean mag std: {np.std(mean_mag):.6f}")
+    print(f"Std mag std:  {np.std(std_mag):.6f}")
+    print(f"PTP mag std:  {np.std(ptp_mag):.6f}")
+
+
+analyze_class(
+    "QPSK",
+    r"data/QPSK/single/iq/QPSK/*.iq",
+)
+
+analyze_class(
+    "QAM16",
+    r"data/QAM16/single/iq/QAM16/*.iq",
+)

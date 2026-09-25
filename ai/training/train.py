@@ -28,8 +28,13 @@ from project_paths import (
     normalize_modulation_name,
 )
 from ai.preprocessing.iq_loader import load_iq_file
-from ai.features.learned_features import prepare_iq_features, tokenize_signal_features
+from ai.features.learned_features import (
+    prepare_iq_features,
+    tokenize_signal_features,
+    prepare_synchronized_symbol_features,
+)
 from ai.models.transformer import SignalTransformer
+from ai.models.multi_branch import MultiBranchSignalClassifier
 from ai.training.metrics import (
     calculate_accuracy,
     calculate_per_class_metrics,
@@ -41,11 +46,14 @@ from ai.training.metrics import (
 # ============================================================
 
 MAX_SIGNAL_LENGTH = 9600   # Maximum raw IQ samples in dataset
-NUM_TOKENS = 256           # Fixed Transformer sequence length (window-averaged tokens)
+MAX_SYMBOLS = 1024         # Maximum symbol-center samples for synchronized representation
+NUM_TOKENS = 256           # Fixed Transformer sequence length (produced by Conv1D front-end)
 SEQUENCE_LENGTH = NUM_TOKENS  # Alias for compatibility
-INPUT_FEATURES = 6         # [I, Q, magnitude, phase, diff_phase_cos, diff_phase_sin]
+INPUT_REPRESENTATION = "raw_iq"  # "raw_iq" | "tokens" | "synchronized_symbols"
+INPUT_FEATURES = 5         # raw_iq channels: I, Q, mag, diff_cos, diff_sin
+INPUT_FEATURES_SYNC = 8    # synchronized_symbols channels: I, Q, mag, diff_cos, diff_sin, power, m4, m8
 BATCH_SIZE = 16
-EPOCHS = 30
+EPOCHS = 50
 LEARNING_RATE = 1e-4
 
 RANDOM_SEED = 42
@@ -178,43 +186,122 @@ def split_dataset(dataset: List[Dict]) -> Tuple[List[Dict], List[Dict], List[Dic
 # FEATURE EXTRACTION & DATASET BUILDING
 # ============================================================
 
-def load_signal_features(item: Dict, num_tokens: int = NUM_TOKENS) -> np.ndarray:
+def load_signal_raw_iq(item: Dict, max_length: int = MAX_SIGNAL_LENGTH) -> np.ndarray:
     """
-    Load IQ file → extract [I, Q, mag, phase] features → tokenize into
-    fixed-length sequence via window averaging.
-
-    Raw signal (8000 or 9600 samples, 4 features)
-      → tokenize into (num_tokens, 4) via non-overlapping window means.
+    Load IQ file -> extract (5, max_length) raw [I, Q, mag, diff_cos, diff_sin] float32 tensor.
+    Channel 0 = I (RMS-normalized real)
+    Channel 1 = Q (RMS-normalized imag)
+    Channel 2 = magnitude (RMS-normalized signal envelope)
+    Channel 3 = diff_cos (in-phase component of differential phasor)
+    Channel 4 = diff_sin (quadrature component of differential phasor)
     """
     iq = load_iq_file(item["iq_path"])
-    features = prepare_iq_features(iq)  # (N, 4)
-    tokens = tokenize_signal_features(features, num_tokens=num_tokens)  # (256, 4)
+    if len(iq) < max_length:
+        pad_len = max_length - len(iq)
+        iq = np.pad(iq, (0, pad_len), mode="constant")
+    else:
+        iq = iq[:max_length]
+
+    i = np.real(iq).astype(np.float32)
+    q = np.imag(iq).astype(np.float32)
+    mag = np.abs(iq).astype(np.float32)
+
+    # RMS-power normalization: scale = sqrt(E[|x|^2])
+    scale = float(np.sqrt(np.mean(mag ** 2)))
+    if scale > 1e-12 and np.isfinite(scale):
+        i = i / scale
+        q = q / scale
+        mag = mag / scale
+
+    diff_cos = np.ones(max_length, dtype=np.float32)
+    diff_sin = np.zeros(max_length, dtype=np.float32)
+
+    if len(iq) > 1:
+        prod = iq[1:] * np.conj(iq[:-1])
+        prod_mag = np.abs(prod).astype(np.float32)
+        valid = prod_mag > 1e-12
+        unit_phasor = np.zeros(len(prod), dtype=np.complex64)
+        unit_phasor[valid] = prod[valid] / prod_mag[valid]
+
+        diff_cos[1:] = np.nan_to_num(np.real(unit_phasor), nan=0.0, posinf=0.0, neginf=0.0)
+        diff_sin[1:] = np.nan_to_num(np.imag(unit_phasor), nan=0.0, posinf=0.0, neginf=0.0)
+
+    return np.stack([i, q, mag, diff_cos, diff_sin], axis=0)
+
+
+def load_signal_synchronized(item: Dict, max_symbols: int = MAX_SYMBOLS) -> np.ndarray:
+    """
+    Load IQ file -> blind synchronization -> symbol-center feature tensor.
+
+    Returns shape (8, max_symbols): [I, Q, mag, diff_cos, diff_sin, power, m4, m8].
+    All synchronization is fully blind (no metadata leakage).
+    """
+    iq = load_iq_file(item["iq_path"])
+    tensor = prepare_synchronized_symbol_features(
+        iq, max_symbols=max_symbols, num_channels=8
+    )
+    return tensor
+
+
+def load_signal_features(item: Dict, num_tokens: int = NUM_TOKENS) -> np.ndarray:
+    """
+    Load IQ file -> extract handcrafted features -> tokenize into
+    fixed-length sequence via window averaging (backward compatibility).
+    """
+    iq = load_iq_file(item["iq_path"])
+    features = prepare_iq_features(iq)
+    tokens = tokenize_signal_features(features, num_tokens=num_tokens)
     return tokens
 
 
 def build_split_arrays(
     samples: List[Dict],
+    representation: str = INPUT_REPRESENTATION,
     num_tokens: int = NUM_TOKENS,
+    max_length: int = MAX_SIGNAL_LENGTH,
+    max_symbols: int = MAX_SYMBOLS,
     split_name: str = "dataset",
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Build (X, y) arrays from a list of sample dicts.
+    Supports:
+        representation="raw_iq": X shape (N, 5, max_length)  [I, Q, mag, diff_cos, diff_sin]
+        representation="synchronized_symbols": X shape (N, 8, max_symbols)
+        representation="tokens": X shape (N, num_tokens, num_features)
     """
     X = []
     y = []
+    errors = 0
 
-    print(f"\nExtracting & tokenizing features for {len(samples)} {split_name} signals...")
+    print(f"\nLoading {representation} inputs for {len(samples)} {split_name} signals...")
     for idx, item in enumerate(samples):
-        features = load_signal_features(item, num_tokens=num_tokens)
-        X.append(features)
+        try:
+            if representation == "raw_iq":
+                feats = load_signal_raw_iq(item, max_length=max_length)
+            elif representation == "synchronized_symbols":
+                feats = load_signal_synchronized(item, max_symbols=max_symbols)
+            else:
+                feats = load_signal_features(item, num_tokens=num_tokens)
+        except Exception as e:
+            # Synchronized pipeline may fail on edge cases; log and use zeros
+            if representation == "synchronized_symbols":
+                errors += 1
+                print(f"  [WARN] Sync failed for {item['sample_id']}: {e}")
+                feats = np.zeros((INPUT_FEATURES_SYNC, max_symbols), dtype=np.float32)
+            else:
+                raise
+        X.append(feats)
         y.append(item["label"])
 
-        if (idx + 1) % 200 == 0 or (idx + 1) == len(samples):
+        if (idx + 1) % 100 == 0 or (idx + 1) == len(samples):
             print(f"  Loaded {idx + 1}/{len(samples)}")
+
+    if errors > 0:
+        print(f"  [WARN] {errors}/{len(samples)} sync failures (zero-filled)")
 
     X = np.asarray(X, dtype=np.float32)
     y = np.asarray(y, dtype=np.int64)
-    print(f"  {split_name} tokens: X shape={X.shape}, y shape={y.shape}")
+    print(f"  {split_name} data: X shape={X.shape}, y shape={y.shape}")
     return X, y
 
 
@@ -283,7 +370,11 @@ def validate_dataset(dataset: List[Dict]) -> None:
 # SMOKE TEST
 # ============================================================
 
-def run_smoke_test(model: torch.nn.Module, device: torch.device) -> None:
+def run_smoke_test(
+    model: torch.nn.Module,
+    device: torch.device,
+    representation: str = INPUT_REPRESENTATION,
+) -> None:
     """
     Verify model forward/backward pass with one sample per class.
     """
@@ -304,13 +395,18 @@ def run_smoke_test(model: torch.nn.Module, device: torch.device) -> None:
 
     print(f"Loaded 1 sample from each of {NUM_CLASSES} classes")
 
-    # Build feature tensors
+    # Build input tensors
     X_list = []
     y_list = []
     for class_name in CLASS_NAMES:
         item = class_samples[class_name]
-        features = load_signal_features(item)
-        X_list.append(features)
+        if representation == "raw_iq":
+            feats = load_signal_raw_iq(item)
+        elif representation == "synchronized_symbols":
+            feats = load_signal_synchronized(item)
+        else:
+            feats = load_signal_features(item)
+        X_list.append(feats)
         y_list.append(item["label"])
 
     X = torch.tensor(np.array(X_list), dtype=torch.float32).to(device)
@@ -403,15 +499,37 @@ def train_model(
     epochs: int = EPOCHS,
     learning_rate: float = LEARNING_RATE,
     save_path: Path = MODEL_PATH,
+    class_weights: Optional[List[float]] = None,
+    weight_decay: float = 5e-4,
+    label_smoothing: float = 0.05,
+    early_stopping_patience: int = 8,
 ) -> Tuple[List[Dict], float, int]:
-    criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    if class_weights is not None:
+        w = torch.tensor(class_weights, dtype=torch.float32).to(device)
+        criterion = torch.nn.CrossEntropyLoss(weight=w, label_smoothing=label_smoothing)
+        print(f"  Class weights: {dict(zip(CLASS_NAMES, class_weights))}")
+    else:
+        criterion = torch.nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+        print(f"  Class weights: None (uniform, label_smoothing={label_smoothing})")
 
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=0.5,
+        patience=4,
+        min_lr=1e-6,
+    )
+
+    best_val_loss = float("inf")
     best_val_acc = 0.0
     best_epoch = 0
+    epochs_no_improve = 0
     history = []
 
-    print(f"\nStarting training on {device} for {epochs} epochs (lr={learning_rate})...")
+    print(f"\nStarting training on {device} for {epochs} epochs (lr={learning_rate}, weight_decay={weight_decay})...")
+    print(f"  Early stopping patience: {early_stopping_patience} epochs (monitoring val_loss)")
+    print(f"  ReduceLROnPlateau: factor=0.5, patience=4, min_lr=1e-6")
 
     for epoch in range(epochs):
         model.train()
@@ -427,6 +545,9 @@ def train_model(
             outputs = model(features)
             loss = criterion(outputs, labels)
             loss.backward()
+
+            # Gradient clipping
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             total_loss += loss.item() * labels.size(0)
@@ -441,6 +562,8 @@ def train_model(
             model, validation_loader, criterion, device
         )
 
+        # Step scheduler based on validation loss
+        scheduler.step(val_loss)
         current_lr = optimizer.param_groups[0]["lr"]
 
         epoch_record = {
@@ -459,17 +582,21 @@ def train_model(
             f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc * 100.0:6.2f}% | LR: {current_lr:.1e}"
         )
 
-        if val_acc >= best_val_acc:
+        # Track best model by lowest validation loss
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
             best_val_acc = val_acc
             best_epoch = epoch + 1
+            epochs_no_improve = 0
             save_path.parent.mkdir(parents=True, exist_ok=True)
-            # Save rich checkpoint with model config and metadata
             checkpoint = {
                 "model_state_dict": model.state_dict(),
+                "model_architecture": model.__class__.__name__,
                 "num_classes": NUM_CLASSES,
                 "class_names": CLASS_NAMES,
                 "class_to_index": CLASS_TO_INDEX,
-                "input_features": getattr(model, "input_features", INPUT_FEATURES),
+                "input_features": getattr(model, "input_features", getattr(model, "input_channels", INPUT_FEATURES)),
+                "use_conv_frontend": getattr(model, "use_conv_frontend", True),
                 "d_model": model.d_model,
                 "sequence_length": SEQUENCE_LENGTH,
                 "epoch": epoch + 1,
@@ -477,6 +604,21 @@ def train_model(
                 "validation_loss": float(val_loss),
             }
             torch.save(checkpoint, save_path)
+        else:
+            epochs_no_improve += 1
+            if epochs_no_improve >= early_stopping_patience:
+                print(f"\n[EARLY STOPPING] Validation loss did not improve for {early_stopping_patience} consecutive epochs.")
+                print(f"Stopping early at epoch {epoch + 1}. Restoring best checkpoint from epoch {best_epoch}.")
+                break
+
+    # Restore best checkpoint
+    if save_path.exists():
+        best_cp = torch.load(save_path, map_location=device, weights_only=False)
+        if isinstance(best_cp, dict) and "model_state_dict" in best_cp:
+            model.load_state_dict(best_cp["model_state_dict"])
+        else:
+            model.load_state_dict(best_cp)
+        print(f"\n[OK] Restored best checkpoint from epoch {best_epoch} (Val Loss: {best_val_loss:.4f}, Val Acc: {best_val_acc * 100.0:.2f}%)")
 
     return history, best_val_acc, best_epoch
 
@@ -555,6 +697,7 @@ def run_training_pipeline(
     epochs: int = EPOCHS,
     batch_size: int = BATCH_SIZE,
     learning_rate: float = LEARNING_RATE,
+    representation: str = INPUT_REPRESENTATION,
     max_samples: Optional[int] = None,
     save_checkpoint: bool = True,
     smoke_test: bool = False,
@@ -573,6 +716,7 @@ def run_training_pipeline(
     print(f"Device: {device}")
     print(f"Epochs: {epochs}")
     print(f"Batch size: {batch_size}")
+    print(f"Input representation: {representation}")
     print(f"Sequence length: {SEQUENCE_LENGTH}")
     print(f"Num classes: {NUM_CLASSES}")
     print(f"Classes: {CLASS_NAMES}")
@@ -610,9 +754,9 @@ def run_training_pipeline(
     # --------------------------------------------------------
     # 4. Build feature arrays
     # --------------------------------------------------------
-    X_train, y_train = build_split_arrays(train_samples, num_tokens=NUM_TOKENS, split_name="train")
-    X_val, y_val = build_split_arrays(val_samples, num_tokens=NUM_TOKENS, split_name="validation")
-    X_test, y_test = build_split_arrays(test_samples, num_tokens=NUM_TOKENS, split_name="test")
+    X_train, y_train = build_split_arrays(train_samples, representation=representation, num_tokens=NUM_TOKENS, split_name="train")
+    X_val, y_val = build_split_arrays(val_samples, representation=representation, num_tokens=NUM_TOKENS, split_name="validation")
+    X_test, y_test = build_split_arrays(test_samples, representation=representation, num_tokens=NUM_TOKENS, split_name="test")
 
     # --------------------------------------------------------
     # 5. Create DataLoaders
@@ -636,10 +780,35 @@ def run_training_pipeline(
     # --------------------------------------------------------
     # 6. Create model
     # --------------------------------------------------------
-    model = SignalTransformer(input_features=INPUT_FEATURES, num_classes=NUM_CLASSES).to(device)
-    print(f"\nModel: SignalTransformer")
-    print(f"  Input features: {INPUT_FEATURES}")
+    if representation == "raw_iq" or representation == "synchronized_symbols":
+        if representation == "synchronized_symbols":
+            input_dim = INPUT_FEATURES_SYNC  # 8: [I, Q, mag, diff_cos, diff_sin, power, m4, m8]
+            channel_desc = "I, Q, mag, diff_cos, diff_sin, power, m4, m8"
+        else:
+            input_dim = INPUT_FEATURES  # 5: [I, Q, mag, diff_cos, diff_sin]
+            channel_desc = "I, Q, mag, diff_cos, diff_sin"
+        model = MultiBranchSignalClassifier(
+            input_channels=input_dim,
+            num_classes=NUM_CLASSES,
+            d_model=64,
+            nhead=4,
+            transformer_layers=2,
+            dropout=0.35,
+            num_tokens=NUM_TOKENS,
+            num_gnn_nodes=64,
+            use_gnn=True,
+        ).to(device)
+        arch_name = f"MultiBranchSignalClassifier (CNN + Transformer + Constellation GNN, {input_dim}ch)"
+    else:
+        input_dim = X_train.shape[-1]
+        channel_desc = f"{input_dim} token features"
+        model = SignalTransformer(input_features=input_dim, num_classes=NUM_CLASSES).to(device)
+        arch_name = "SignalTransformer (Token Linear Projection)"
+
+    print(f"\nModel: {arch_name}")
+    print(f"  Input features: {input_dim} (channels: {channel_desc})")
     print(f"  Num classes: {NUM_CLASSES}")
+    print(f"  Class weights: None (uniform — standard CrossEntropyLoss)")
     print(f"  Model output shape: [batch_size, {NUM_CLASSES}]")
 
     total_params = sum(p.numel() for p in model.parameters())
@@ -650,7 +819,7 @@ def run_training_pipeline(
     # --------------------------------------------------------
     # 7. Smoke test
     # --------------------------------------------------------
-    run_smoke_test(model, device)
+    run_smoke_test(model, device, representation=representation)
 
     # --------------------------------------------------------
     # 8. Train
@@ -663,7 +832,8 @@ def run_training_pipeline(
         device=device,
         epochs=actual_epochs,
         learning_rate=learning_rate,
-        save_path=MODEL_PATH if save_checkpoint else RESULT_FOLDER / "temp_model.pth",
+        save_path=target_checkpoint if save_checkpoint else RESULT_FOLDER / "temp_model.pth",
+        class_weights=None,  # run_016: standard unweighted CrossEntropyLoss
     )
 
     # --------------------------------------------------------
@@ -674,7 +844,7 @@ def run_training_pipeline(
     print("=" * 60)
 
     # Load best checkpoint
-    save_path = MODEL_PATH if save_checkpoint else RESULT_FOLDER / "temp_model.pth"
+    save_path = target_checkpoint if save_checkpoint else RESULT_FOLDER / "temp_model.pth"
     if save_path.exists():
         checkpoint = torch.load(save_path, map_location=device, weights_only=False)
         if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
@@ -718,6 +888,7 @@ def run_training_pipeline(
         "epochs": actual_epochs,
         "batch_size": batch_size,
         "learning_rate": learning_rate,
+        "input_representation": representation,
         "sequence_length": SEQUENCE_LENGTH,
         "num_classes": NUM_CLASSES,
         "class_names": CLASS_NAMES,
@@ -737,7 +908,7 @@ def run_training_pipeline(
         test_loss=test_loss,
         test_accuracy=test_acc,
         per_class_results=per_class_results,
-        model_path=MODEL_PATH,
+        model_path=target_checkpoint,
     )
 
     print(f"\n[SUCCESS] Training results saved to:\n  {txt_file}\n  {json_file}")
@@ -751,4 +922,25 @@ def run_training_pipeline(
 
 
 if __name__ == "__main__":
-    run_training_pipeline()
+    import argparse
+    parser = argparse.ArgumentParser(description="SYNAPS Training Pipeline")
+    parser.add_argument(
+        "--representation",
+        type=str,
+        default=INPUT_REPRESENTATION,
+        choices=["raw_iq", "tokens", "synchronized_symbols"],
+        help="Input representation mode",
+    )
+    parser.add_argument("--epochs", type=int, default=EPOCHS)
+    parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
+    parser.add_argument("--lr", type=float, default=LEARNING_RATE)
+    parser.add_argument("--checkpoint", type=str, default=None, help="Custom checkpoint path")
+    args = parser.parse_args()
+
+    run_training_pipeline(
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        learning_rate=args.lr,
+        representation=args.representation,
+        checkpoint_path=args.checkpoint,
+    )

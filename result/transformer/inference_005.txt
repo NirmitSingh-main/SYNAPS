@@ -1,0 +1,22 @@
+SYNAPS TRANSFORMER INFERENCE
+============================
+
+Input file: data/BPSK/single/iq/BPSK/signal_00001_bpsk.iq
+Input format: IQ
+Samples: 9600
+Feature shape: (256, 10)
+
+PREDICTION
+----------
+Predicted class: BPSK
+Predicted index: 0
+Confidence: 99.96%
+Detection status: KNOWN
+
+PROBABILITIES
+-------------
+BPSK: 99.96%
+QPSK: 0.01%
+FSK: 0.00%
+QAM16: 0.02%
+MIXED: 0.01%

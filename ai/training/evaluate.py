@@ -33,32 +33,6 @@ def main():
     print("==============================")
 
     # --------------------------------------------------
-    # Load existing dataset using CSV splits
-    # --------------------------------------------------
-
-    dataset_all = load_dataset_csv()
-    train_samples, val_samples, test_samples = split_dataset(dataset_all)
-
-    X_test, y_test = build_split_arrays(
-        test_samples,
-        num_tokens=NUM_TOKENS,
-        split_name="test",
-    )
-
-    print("\nTest samples:", len(X_test))
-    print("Test shape:", X_test.shape)
-
-    # --------------------------------------------------
-    # Device
-    # --------------------------------------------------
-
-    device = torch.device(
-        "cuda" if torch.cuda.is_available() else "cpu"
-    )
-
-    print("Device:", device)
-
-    # --------------------------------------------------
     # Load trained Transformer
     # --------------------------------------------------
 
@@ -67,6 +41,11 @@ def main():
             f"Trained model not found: {MODEL_PATH}"
         )
 
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
+    print("Device:", device)
+
     # Load checkpoint (supports rich checkpoint, legacy state_dict, and arbitrary feature counts)
     checkpoint = torch.load(
         MODEL_PATH,
@@ -74,31 +53,62 @@ def main():
         weights_only=False,
     )
 
-    in_features = 6
-    if isinstance(checkpoint, dict) and "input_features" in checkpoint:
-        in_features = checkpoint["input_features"]
-    elif isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-        in_proj_w = checkpoint["model_state_dict"].get("input_projection.weight")
-        if in_proj_w is not None:
-            in_features = in_proj_w.shape[1]
+    from ai.models.multi_branch import MultiBranchSignalClassifier
 
-    model = SignalTransformer(
-        input_features=in_features,
-        num_classes=NUM_CLASSES,
-    )
+    in_features = 5
+    arch = "SignalTransformer"
+    if isinstance(checkpoint, dict):
+        if "input_features" in checkpoint:
+            in_features = checkpoint["input_features"]
+        if "model_architecture" in checkpoint:
+            arch = checkpoint["model_architecture"]
+        elif "model_state_dict" in checkpoint:
+            if "fusion_head.0.weight" in checkpoint["model_state_dict"]:
+                arch = "MultiBranchSignalClassifier"
+            elif "input_projection.weight" in checkpoint["model_state_dict"]:
+                in_features = checkpoint["model_state_dict"]["input_projection.weight"].shape[1]
+
+    if arch == "MultiBranchSignalClassifier":
+        model = MultiBranchSignalClassifier(
+            input_channels=in_features,
+            num_classes=NUM_CLASSES,
+        )
+    else:
+        model = SignalTransformer(
+            input_features=in_features,
+            num_classes=NUM_CLASSES,
+        )
 
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         model.load_state_dict(checkpoint["model_state_dict"])
-        print(f"Loaded rich checkpoint (epoch {checkpoint.get('epoch', '?')}, in_features={in_features})")
+        print(f"Loaded rich checkpoint ({arch}, epoch {checkpoint.get('epoch', '?')}, in_features={in_features})")
     else:
         model.load_state_dict(checkpoint)
-        print(f"Loaded legacy state_dict checkpoint (in_features={in_features})")
+        print(f"Loaded legacy state_dict checkpoint ({arch}, in_features={in_features})")
 
     model.to(device)
     model.eval()
 
-    # Slice features to match model input dimension if needed
-    if X_test.shape[-1] > in_features:
+    # --------------------------------------------------
+    # Load test dataset using CSV splits
+    # --------------------------------------------------
+
+    dataset_all = load_dataset_csv()
+    train_samples, val_samples, test_samples = split_dataset(dataset_all)
+
+    representation = "raw_iq" if in_features in (2, 3, 5) else "tokens"
+    X_test, y_test = build_split_arrays(
+        test_samples,
+        representation=representation,
+        num_tokens=NUM_TOKENS,
+        split_name="test",
+    )
+
+    print("\nTest samples:", len(X_test))
+    print("Test shape:", X_test.shape)
+
+    # Slice features to match model input dimension if needed for handcrafted tokens
+    if representation == "tokens" and X_test.shape[-1] > in_features:
         X_eval = X_test[:, :, :in_features]
     else:
         X_eval = X_test

@@ -223,122 +223,99 @@ def _estimate_power_law_frequency(
         peak_strength_ratio
 
     The transformed signal is:
-
         y[n] = x[n] ** power
 
-    For PSK this suppresses much of the data-dependent phase
-    structure and produces a spectral component related to
-    the carrier-frequency rotation.
-
-    The returned frequency is divided by `power` to recover
-    the original carrier frequency.
+    Includes DC masking, amplitude gating for outer constellation points,
+    zero-padded 4x FFT with Hanning window, and sub-bin parabolic refinement.
     """
 
     if power < 2:
-        raise ValueError(
-            "Power must be at least 2."
-        )
+        raise ValueError("Power must be at least 2.")
 
-    signal = _prepare_signal(
-        signal
-    )
+    signal = _prepare_signal(signal)
+    signal = signal - np.mean(signal)
 
-    signal = (
-        signal
-        - np.mean(signal)
-    )
-
-    if np.allclose(
-        signal,
-        0.0,
-    ):
+    if np.allclose(signal, 0.0):
         return 0.0, 0.0
 
-    transformed = (
-        signal ** power
-    )
+    mag = np.abs(signal)
+    number_of_samples = signal.size
 
-    number_of_samples = (
-        transformed.size
-    )
+    # Evaluate full signal and amplitude-gated signal (isolates outer constellation points)
+    variations = [signal]
+    if number_of_samples >= 200:
+        thresh = float(np.percentile(mag, 60))
+        gated = np.where(mag >= thresh, signal, 0.0)
+        variations.append(gated)
 
-    window = np.hanning(
-        number_of_samples
-    )
+    best_freq = 0.0
+    best_strength = 0.0
 
-    spectrum = np.abs(
-        np.fft.fftshift(
-            np.fft.fft(
-                transformed * window
-            )
-        )
-    )
+    nfft = int(2 ** np.ceil(np.log2(max(number_of_samples * 4, 16384))))
 
-    frequencies = _frequency_axis(
-        number_of_samples,
-        sampling_rate,
-    )
+    for var_sig in variations:
+        transformed = var_sig ** power
+        window = np.hanning(len(transformed))
+        spectrum = np.abs(np.fft.fftshift(np.fft.fft(transformed * window, n=nfft)))
+        frequencies = _frequency_axis(nfft, sampling_rate)
 
-    if spectrum.size == 0:
-        return 0.0, 0.0
+        # DC masking (+/- 300 Hz)
+        dc_mask = np.abs(frequencies) < 300.0
+        spectrum[dc_mask] = 0.0
 
-    # Ignore DC.
-    dc_index = int(
-        np.argmin(
-            np.abs(frequencies)
-        )
-    )
+        # Plausible CFO range
+        valid_mask = np.abs(frequencies) < (sampling_rate / 2.0 - 1000.0)
+        valid_spectrum = spectrum[valid_mask]
+        valid_frequencies = frequencies[valid_mask]
 
-    spectrum[
-        max(0, dc_index - 1):
-        min(spectrum.size, dc_index + 2)
-    ] = 0.0
+        if valid_spectrum.size == 0 or np.max(valid_spectrum) <= 0.0:
+            continue
 
-    peak_index = int(
-        np.argmax(
-            spectrum
-        )
-    )
+        peak_idx_valid = int(np.argmax(valid_spectrum))
+        orig_indices = np.where(valid_mask)[0]
+        orig_idx = int(orig_indices[peak_idx_valid])
 
-    peak_frequency = float(
-        frequencies[peak_index]
-    )
+        # Parabolic sub-bin interpolation
+        if 1 <= orig_idx < spectrum.size - 1:
+            alpha = spectrum[orig_idx - 1]
+            beta = spectrum[orig_idx]
+            gamma = spectrum[orig_idx + 1]
+            denom = alpha - 2.0 * beta + gamma
+            if abs(denom) > 1e-12:
+                delta = 0.5 * (alpha - gamma) / denom
+                delta = float(np.clip(delta, -0.5, 0.5))
+                refined_freq = float(frequencies[orig_idx] + delta * (sampling_rate / nfft))
+            else:
+                refined_freq = float(frequencies[orig_idx])
+        else:
+            refined_freq = float(frequencies[orig_idx])
 
-    peak_value = float(
-        spectrum[peak_index]
-    )
+        nonzero_spectrum = valid_spectrum[valid_spectrum > 0.0]
+        median_level = float(np.median(nonzero_spectrum)) if nonzero_spectrum.size > 0 else 1.0
+        peak_value = float(valid_spectrum[peak_idx_valid])
+        strength = peak_value / max(median_level, 1e-12)
 
-    nonzero_spectrum = spectrum[
-        spectrum > 0.0
-    ]
+        if strength > best_strength:
+            best_strength = strength
+            best_freq = refined_freq / float(power)
 
-    if nonzero_spectrum.size == 0:
-        return 0.0, 0.0
+    # Optional fine phase-autocorrelation residual refinement
+    if abs(best_freq) < sampling_rate / 2.0 and number_of_samples >= 128:
+        # Coarse derotate
+        t_vec = np.arange(number_of_samples) / sampling_rate
+        coarse_derotated = signal * np.exp(-1j * 2 * np.pi * best_freq * t_vec)
+        z = coarse_derotated ** power
+        max_lag = min(24, number_of_samples // 10)
+        if max_lag >= 4:
+            R = np.array([np.mean(z[m:] * np.conj(z[:-m])) for m in range(1, max_lag + 1)])
+            unwrapped = np.unwrap(np.angle(R))
+            lags = np.arange(1, max_lag + 1)
+            slope, _ = np.polyfit(lags, unwrapped, 1)
+            delta_f = (slope * sampling_rate) / (2.0 * np.pi * float(power))
+            if abs(delta_f) < (sampling_rate / (2.0 * float(power) * max_lag)):
+                best_freq = best_freq + float(delta_f)
 
-    median_level = float(
-        np.median(
-            nonzero_spectrum
-        )
-    )
-
-    if median_level <= 0.0:
-        peak_strength_ratio = float(
-            "inf"
-        )
-    else:
-        peak_strength_ratio = (
-            peak_value
-            / median_level
-        )
-
-    measured_frequency = (
-        peak_frequency / power
-    )
-
-    return (
-        float(measured_frequency),
-        float(peak_strength_ratio),
-    )
+    return float(best_freq), float(best_strength)
 
 
 def _estimate_psk_frequency(
@@ -350,49 +327,25 @@ def _estimate_psk_frequency(
     Estimate carrier frequency for PSK.
 
     BPSK uses a second-power estimator.
-
     QPSK uses a fourth-power estimator.
-
-    The transformed frequency is divided by the corresponding
-    power to recover the original carrier-frequency estimate.
     """
 
-    modulation_name = (
-        modulation.upper()
-    )
+    modulation_name = modulation.upper()
 
-    if modulation_name in {
-        "BPSK",
-        "2PSK",
-        "2-PSK",
-    }:
+    if modulation_name in {"BPSK", "2PSK", "2-PSK"}:
         power = 2
-
-    elif modulation_name in {
-        "QPSK",
-        "4PSK",
-        "4-PSK",
-    }:
-        power = 4
-
     else:
         power = 4
 
-    frequency, strength = (
-        _estimate_power_law_frequency(
-            signal,
-            sampling_rate,
-            power,
-        )
+    frequency, strength = _estimate_power_law_frequency(
+        signal,
+        sampling_rate,
+        power,
     )
 
     return {
-        "measured_frequency_hz": float(
-            frequency
-        ),
-        "peak_strength_ratio": float(
-            strength
-        ),
+        "measured_frequency_hz": float(frequency),
+        "peak_strength_ratio": float(strength),
     }
 
 
@@ -403,49 +356,19 @@ def _estimate_qam_frequency(
     """
     Estimate carrier frequency for QAM.
 
-    A fourth-power estimator is used first. If the transformed
-    spectrum does not contain a meaningful peak, the generic
-    spectral estimator is used as a fallback.
-
-    The generic fallback is retained because QAM data does not
-    always produce a strong fourth-power spectral line.
+    Uses amplitude-gated fourth-power cyclic spectral estimator with
+    DC masking and sub-bin parabolic refinement.
     """
 
-    power_law_frequency, strength = (
-        _estimate_power_law_frequency(
-            signal,
-            sampling_rate,
-            4,
-        )
-    )
-
-    # A strong transformed spectral peak is preferred.
-    if np.isfinite(strength) and strength >= 3.0:
-
-        return {
-            "measured_frequency_hz": float(
-                power_law_frequency
-            ),
-            "peak_strength_ratio": float(
-                strength
-            ),
-        }
-
-    # Fall back to the original generic estimator.
-    generic_frequency = (
-        _estimate_carrier_frequency(
-            signal,
-            sampling_rate,
-        )
+    frequency, strength = _estimate_power_law_frequency(
+        signal,
+        sampling_rate,
+        4,
     )
 
     return {
-        "measured_frequency_hz": float(
-            generic_frequency
-        ),
-        "peak_strength_ratio": float(
-            strength
-        ),
+        "measured_frequency_hz": float(frequency),
+        "peak_strength_ratio": float(strength),
     }
 
 
@@ -864,14 +787,28 @@ def estimate_cfo(
         }
 
     # ---------------------------------------------------------
-    # Generic fallback
+    # Generic / Blind fallback (power-4 and power-2 search)
     # ---------------------------------------------------------
-    measured_frequency_hz = (
-        _estimate_carrier_frequency(
-            signal,
-            sampling_rate,
+    freq_4, strength_4 = _estimate_power_law_frequency(signal, sampling_rate, 4)
+    freq_2, strength_2 = _estimate_power_law_frequency(signal, sampling_rate, 2)
+
+    if strength_4 >= strength_2 and strength_4 >= 2.0:
+        measured_frequency_hz = float(freq_4)
+        est_name = "blind_fourth_power"
+    elif strength_2 > strength_4 and strength_2 >= 2.0:
+        measured_frequency_hz = float(freq_2)
+        est_name = "blind_second_power"
+    elif strength_4 >= 1.5:
+        measured_frequency_hz = float(freq_4)
+        est_name = "blind_fourth_power_low_snr"
+    else:
+        measured_frequency_hz = float(
+            _estimate_carrier_frequency(
+                signal,
+                sampling_rate,
+            )
         )
-    )
+        est_name = "generic_peak"
 
     cfo_hz = float(
         measured_frequency_hz
@@ -888,7 +825,7 @@ def estimate_cfo(
         "cfo_hz": float(
             cfo_hz
         ),
-        "estimator": "generic_peak",
+        "estimator": est_name,
     }
 
 

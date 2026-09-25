@@ -107,16 +107,26 @@ def _estimate_autocorrelation_candidate(
         abs(np.vdot(centered[:-lag], centered[lag:])) / (number_of_samples - lag)
         for lag in lags
     ])
-    if autocorrelation[0] <= 0.0:
+    if autocorrelation.size == 0 or autocorrelation[0] <= 0.0:
         return None
-    normalized = autocorrelation / autocorrelation[0]
-    crossings = np.flatnonzero(normalized <= 0.05)
-    if crossings.size == 0:
-        return None
-    crossing_index = int(crossings[0])
+    normalized = autocorrelation / (np.abs(np.vdot(centered, centered)) / number_of_samples)
+
+    # 1. Look for crossing threshold or first local minimum / knee
+    crossings = np.flatnonzero(normalized <= 0.15)
+    if crossings.size > 0:
+        crossing_index = int(crossings[0])
+    else:
+        # First local minimum
+        min_idx = None
+        for i in range(1, len(normalized) - 1):
+            if normalized[i] <= normalized[i-1] and normalized[i] <= normalized[i+1]:
+                min_idx = i
+                break
+        crossing_index = min_idx if min_idx is not None else int(np.argmin(normalized[:min(30, len(normalized))]))
+
     fit_start = max(0, crossing_index - 4)
-    fit_lags = lags[fit_start:crossing_index + 1].astype(np.float64)
-    fit_values = normalized[fit_start:crossing_index + 1]
+    fit_lags = np.r_[0, lags[fit_start:crossing_index + 1].astype(np.float64)]
+    fit_values = np.r_[1.0, normalized[fit_start:crossing_index + 1]]
     if fit_lags.size < 2:
         return None
     slope, intercept = np.polyfit(fit_lags, fit_values, 1)
@@ -125,9 +135,13 @@ def _estimate_autocorrelation_candidate(
     samples_per_symbol = -intercept / slope
     symbol_rate = sampling_rate / samples_per_symbol
     if not np.isfinite(symbol_rate) or not minimum_symbol_rate_hz <= symbol_rate <= maximum_symbol_rate_hz:
-        return None
+        # Fallback to crossing lag directly
+        samples_per_symbol = float(lags[crossing_index])
+        symbol_rate = sampling_rate / samples_per_symbol
+        if not minimum_symbol_rate_hz <= symbol_rate <= maximum_symbol_rate_hz:
+            return None
     residual = float(np.mean((fit_values - (slope * fit_lags + intercept)) ** 2))
-    confidence = float(np.clip(1.0 - residual / 0.05, 0.0, 1.0))
+    confidence = float(np.clip(1.0 - residual / 0.10, 0.0, 1.0))
     return float(symbol_rate), confidence, float(samples_per_symbol)
 
 
