@@ -8,7 +8,3 @@ groq>=0.18.0
 httpx>=0.28.0
 numpy>=2.0.0
 scipy>=1.14.0
-# CPU-only PyTorch — Vercel has no GPU. Use --extra-index-url (not
-# --index-url) so PyPI remains the primary index for all other packages.
---extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.1.0

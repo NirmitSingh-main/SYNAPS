@@ -8,11 +8,12 @@ Integrates:
   Decoding -> RF Fingerprinting -> Intelligence Report.
 """
 
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 import numpy as np
 import datetime
-import torch
+import httpx
 
 from project_paths import (
     CLASS_NAMES,
@@ -59,18 +60,20 @@ from signal_processing.demodulation.fsk import demodulate_fsk
 from signal_processing.demodulation.qam import demodulate_16qam
 from signal_processing.decoding.bit_to_data import bits_to_data
 
-# AI
-from ai.inference.predict import (
-    load_model,
-    prepare_features,
-    CLASS_NAMES as AI_CLASSES,
-)
+# AI Features & Classification Utilities (Pure NumPy / Python, no torch required)
+from ai.features.learned_features import prepare_iq_features, tokenize_signal_features
+
+def prepare_features(iq, num_tokens=256):
+    features = prepare_iq_features(iq)
+    tokens = tokenize_signal_features(features, num_tokens=num_tokens)
+    return tokens.astype(np.float32)
+
 from ai.classification.confidence import (
     calculate_confidence,
     confidence_percent,
 )
 from ai.classification.unknown_detection import get_detection_status
-from ai.classification.modulation import classify_modulation
+from ai.classification.modulation import classify_modulation, CLASS_NAMES as AI_CLASSES
 
 # Intelligence & Fusion
 from fusion.feature_fusion import fuse_dsp_and_ai_features
@@ -94,17 +97,20 @@ class AnalysisPipeline:
         self,
         model_path: Optional[Union[str, Path]] = None,
     ):
+        self.ai_service_url = os.getenv("AI_SERVICE_URL", "http://localhost:8001").rstrip("/")
+        self.model = None
+        self.device = "cpu"
+        self.ai_available = False
+
+        # Try loading local PyTorch model if torch is available in local dev environment
         try:
-            self.model, self.device = load_model(model_path)
+            from ai.inference.predict import load_model
+            self.model, device_obj = load_model(model_path)
+            self.device = str(device_obj)
             self.ai_available = True
-        except Exception as e:
-            print(
-                f"[WARN] AI Model could not be loaded: "
-                f"{e}. Running DSP-only mode."
-            )
+        except Exception:
             self.model = None
-            self.device = torch.device("cpu")
-            self.ai_available = False
+            self.ai_available = bool(self.ai_service_url)
 
     def run(
         self,
@@ -181,35 +187,71 @@ class AnalysisPipeline:
         dc_clean = remove_dc(detected_samples)
         preprocessed = normalize_signal(dc_clean)
 
-        # =================================================================
-        # 5. AI CLASSIFICATION
-        # =================================================================
+        ai_summary = None
 
-        if self.ai_available and self.model is not None:
-            features = prepare_features(preprocessed)
-            if hasattr(self.model, "input_features") and features.shape[-1] > self.model.input_features:
-                features = features[:, :self.model.input_features]
+        # Option A: Local PyTorch model inference (if PyTorch & model weights exist locally)
+        if self.model is not None:
+            try:
+                import torch
+                features = prepare_features(preprocessed)
+                if hasattr(self.model, "input_features") and features.shape[-1] > self.model.input_features:
+                    features = features[:, :self.model.input_features]
 
-            x_tensor = torch.tensor(
-                features,
-                dtype=torch.float32,
-            ).unsqueeze(0).to(self.device)
+                x_tensor = torch.tensor(
+                    features,
+                    dtype=torch.float32,
+                ).unsqueeze(0).to(self.device)
 
-            with torch.no_grad():
-                logits = self.model(x_tensor)
+                with torch.no_grad():
+                    logits = self.model(x_tensor)
 
-            probs, pred_idx, conf = calculate_confidence(logits)
-            pred_class = classify_modulation(pred_idx)
+                probs, pred_idx, conf = calculate_confidence(logits)
+                pred_class = classify_modulation(pred_idx)
 
-            conf_pct = confidence_percent(conf)
-            det_status = get_detection_status(conf)
+                conf_pct = confidence_percent(conf)
+                det_status = get_detection_status(conf)
 
-            prob_dict = {
-                name: float(probs[i].item() * 100.0)
-                for i, name in enumerate(AI_CLASSES)
-            }
+                prob_dict = {
+                    name: float(probs[i].item() * 100.0)
+                    for i, name in enumerate(AI_CLASSES)
+                }
 
-        else:
+                ai_summary = {
+                    "predicted_class": pred_class,
+                    "confidence": conf_pct,
+                    "status": det_status,
+                    "probabilities": prob_dict,
+                }
+            except Exception as e:
+                print(f"[WARN] Local PyTorch inference failed: {e}")
+
+        # Option B: Remote AI Service HTTP call (production / Vercel deployment)
+        if ai_summary is None and self.ai_service_url:
+            try:
+                features = prepare_features(preprocessed)
+                if features.shape[-1] > 5:
+                    features = features[:, :5]
+
+                resp = httpx.post(
+                    f"{self.ai_service_url}/predict",
+                    json={"features": features.tolist()},
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    ai_summary = {
+                        "predicted_class": data["predicted_class"],
+                        "confidence": float(data["confidence"]),
+                        "status": data["status"],
+                        "probabilities": data["probabilities"],
+                    }
+                else:
+                    print(f"[WARN] Remote AI Service returned status {resp.status_code}: {resp.text}")
+            except Exception as e:
+                print(f"[WARN] Remote AI Service call failed ({self.ai_service_url}): {e}")
+
+        # Fallback: DSP-only mode if both local model and remote service are unavailable
+        if ai_summary is None:
             pred_class = "UNKNOWN"
             conf_pct = 50.0
             det_status = "UNKNOWN"
@@ -217,13 +259,17 @@ class AnalysisPipeline:
                 name: 25.0
                 for name in CLASS_NAMES
             }
+            ai_summary = {
+                "predicted_class": pred_class,
+                "confidence": conf_pct,
+                "status": det_status,
+                "probabilities": prob_dict,
+            }
 
-        ai_summary = {
-            "predicted_class": pred_class,
-            "confidence": conf_pct,
-            "status": det_status,
-            "probabilities": prob_dict,
-        }
+        pred_class = ai_summary["predicted_class"]
+        conf_pct = ai_summary["confidence"]
+        det_status = ai_summary["status"]
+        prob_dict = ai_summary["probabilities"]
 
         # =================================================================
         # 6. DSP ANALYSIS
