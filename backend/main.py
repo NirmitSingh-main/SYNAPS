@@ -6,16 +6,35 @@ import sys
 import types
 from pathlib import Path
 
-# Ensure project root and backend directory are in sys.path for both local execution and Vercel deployments
-_BACKEND_DIR = Path(__file__).resolve().parent
-_PROJECT_ROOT = _BACKEND_DIR.parent
+# Robustly locate repository root containing project_paths.py across Vercel serverless and local environments
+def _resolve_project_root() -> Path:
+    candidates = [
+        Path.cwd(),
+        Path.cwd().parent,
+        Path(__file__).resolve().parent,
+        Path(__file__).resolve().parent.parent,
+        Path("/vercel/path0"),
+    ]
+    for cand in candidates:
+        curr = cand.resolve()
+        for _ in range(6):
+            if (curr / "project_paths.py").exists():
+                return curr
+            if curr.parent == curr:
+                break
+            curr = curr.parent
+    return Path(__file__).resolve().parent.parent
+
+_PROJECT_ROOT = _resolve_project_root()
+_BACKEND_DIR = _PROJECT_ROOT / "backend" if (_PROJECT_ROOT / "backend").exists() else Path(__file__).resolve().parent
 
 for _p in (_PROJECT_ROOT, _BACKEND_DIR):
     _p_str = str(_p)
-    if _p_str not in sys.path:
-        sys.path.insert(0, _p_str)
+    if _p_str in sys.path:
+        sys.path.remove(_p_str)
+    sys.path.insert(0, _p_str)
 
-# Ensure 'backend' package is resolvable even when CWD or Vercel root is the backend directory
+# Ensure 'backend' package is resolvable in sys.modules
 if "backend" not in sys.modules:
     try:
         import importlib
