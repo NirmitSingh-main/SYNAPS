@@ -1,3 +1,9 @@
 {
-  "framework": "fastapi"
+  "framework": "fastapi",
+  "functions": {
+    "main.py": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  }
 }

@@ -97,7 +97,7 @@ class AnalysisPipeline:
         self,
         model_path: Optional[Union[str, Path]] = None,
     ):
-        self.ai_service_url = os.getenv("AI_SERVICE_URL", "http://localhost:8001").rstrip("/")
+        self.ai_service_url = os.getenv("AI_SERVICE_URL", "").strip().rstrip("/")
         self.model = None
         self.device = "cpu"
         self.ai_available = False
