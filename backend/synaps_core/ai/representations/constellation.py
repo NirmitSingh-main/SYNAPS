@@ -4,7 +4,6 @@
 
 from typing import Tuple
 import numpy as np
-import torch
 
 
 def compute_constellation_histogram(
@@ -43,9 +42,10 @@ def compute_constellation_histogram(
 def extract_constellation_tensor(
     symbols_or_iq: np.ndarray,
     grid_size: int = 64,
-) -> torch.Tensor:
+):
     """
     Extract normalized constellation 2D density tensor of shape (1, grid_size, grid_size).
     """
+    import torch
     grid = compute_constellation_histogram(symbols_or_iq, grid_size=grid_size)
     return torch.from_numpy(grid).unsqueeze(0)

@@ -4,17 +4,17 @@ Raw IQ representation utilities for neural network inputs.
 
 from typing import Tuple
 import numpy as np
-import torch
 
 
 def extract_raw_iq_tensor(
     iq_samples: np.ndarray,
     target_length: int = 1000,
     normalize: bool = True,
-) -> torch.Tensor:
+):
     """
     Extract a (2, target_length) or (target_length, 2) normalized IQ tensor.
     """
+    import torch
     samples = np.asarray(iq_samples, dtype=np.complex64)
     if samples.size == 0:
         raise ValueError("IQ signal cannot be empty.")
