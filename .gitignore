@@ -100,6 +100,8 @@ dist/
 *.keras
 *.pt
 *.pth
+!ai/models/transformer.pth
+!ai_service/models/transformer.pth
 *.onnx
 
 # ============================================================
