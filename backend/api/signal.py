@@ -23,15 +23,16 @@ async def upload_signal(file: UploadFile = File(...)):
     if suffix not in [".iq", ".wav"]:
         raise HTTPException(status_code=400, detail="Only .iq and .wav files are supported.")
 
-    upload_dir = DATA_ROOT / "uploads"
+    upload_dir = Path(tempfile.gettempdir()) / "synaps_uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    dest_path = upload_dir / file.filename
+    safe_filename = Path(file.filename).name
+    dest_path = upload_dir / safe_filename
     with open(dest_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     return {
-        "filename": file.filename,
+        "filename": safe_filename,
         "saved_path": str(dest_path),
         "format": suffix[1:].upper(),
         "size_bytes": dest_path.stat().st_size,
