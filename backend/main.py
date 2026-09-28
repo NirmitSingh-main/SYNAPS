@@ -57,7 +57,11 @@ app = FastAPI(
 # Set FRONTEND_ORIGINS env var (comma-separated) to add more origins.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_ALLOWED_ORIGINS,
+    allow_origins=[
+        "http://localhost:5173",
+        "https://synaps-black.vercel.app",
+        "https://synapsintelligence.netlify.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
