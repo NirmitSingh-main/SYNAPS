@@ -32,6 +32,13 @@ if "backend" not in sys.modules:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Read allowed origins from environment; default to production frontend + local dev.
+_raw_origins = os.getenv(
+    "FRONTEND_ORIGINS",
+    "https://synaps-black.vercel.app,http://localhost:5173",
+)
+_ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 from backend.api.signal import router as signal_router
 from backend.api.analysis import router as analysis_router
 from backend.api.report import router as report_router
@@ -45,10 +52,12 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS middleware for frontend access
+# CORS middleware for frontend access.
+# NOTE: allow_credentials=True requires explicit origins (not "*").
+# Set FRONTEND_ORIGINS env var (comma-separated) to add more origins.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

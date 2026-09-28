@@ -1,21 +1,59 @@
 # ============================================================
-# SYNAPS — .vercelignore
-# Excludes training data, experiments, and large assets that
-# are NOT required for Vercel production inference.
-# This reduces the Vercel bundle from ~5.5 GB to under 500 MB.
+# SYNAPS — root .vercelignore
+#
+# Both Vercel projects (frontend "synaps" and backend
+# "synaps-backend") read this file from the repo root.
+#
+# IMPORTANT: use leading "/" to anchor patterns to the repo
+# root so they cannot accidentally match nested paths such as
+# frontend/SNAPS-FE/src/data/ or backend/synaps_core/data/.
+#
+# The frontend project only uploads frontend/SNAPS-FE/** (its
+# Root Directory), so patterns like "/backend" have no effect
+# on it. The backend project only uploads backend/**, so
+# "/frontend" has no effect on it either. This file is safe
+# for both projects.
 # ============================================================
 
-# Training dataset (3 340 IQ files + 3 342 WAV files ≈ 466 MB)
-data/
+# Training dataset (IQ + WAV files, ~466 MB)
+/data/
 
-# Training notebooks and experiment runs
-experiments/
+# Training experiment outputs
+/experiments/
 
-# Training result logs (text + JSON)
-result/
+# Training result logs
+/result/
 
-# Utility / dataset generation scripts (not needed at runtime)
-scripts/
+# Dataset generation / utility scripts
+/scripts/
+
+# AI service (separate deployment, not part of either project)
+/ai_service/
+
+# Model weights — gitignored anyway, but belt-and-suspenders
+*.pth
+*.pt
+*.onnx
+*.h5
+*.keras
+*.pkl
+*.joblib
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Node artefacts (already in per-project .vercelignores too)
+node_modules/
+dist/
+build/
+.next/
 
 # Local dev files
 *.log
@@ -23,3 +61,4 @@ scripts/
 .env
 .env.*
 !.env.example
+!.env.production
