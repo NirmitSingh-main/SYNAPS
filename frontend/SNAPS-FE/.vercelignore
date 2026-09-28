@@ -1,0 +1,22 @@
+# ============================================================
+# SYNAPS Frontend — .vercelignore
+# Excludes local node_modules, build outputs, and backend
+# files from frontend deployment source uploads.
+# ============================================================
+
+node_modules/
+.next/
+dist/
+build/
+data/
+experiments/
+result/
+scripts/
+backend/
+ai_service/
+
+*.log
+*.tmp
+.env
+.env.*
+!.env.example

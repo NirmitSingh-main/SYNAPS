@@ -17,9 +17,6 @@ result/
 # Utility / dataset generation scripts (not needed at runtime)
 scripts/
 
-# Frontend source (deployed separately)
-frontend/
-
 # Local dev files
 *.log
 *.tmp

@@ -1,0 +1,21 @@
+# ============================================================
+# SYNAPS Backend — .vercelignore
+# Excludes training data, experiments, and frontend source from
+# backend function deployment to optimize bundle size.
+# ============================================================
+
+# Training dataset & large assets
+data/
+experiments/
+result/
+scripts/
+
+# Frontend source
+frontend/
+
+# Local dev & temp files
+*.log
+*.tmp
+.env
+.env.*
+!.env.example
