@@ -110,23 +110,16 @@ def _squared_distance_matrix(
     centers: np.ndarray,
 ) -> np.ndarray:
     """
-    Calculate squared Euclidean distances.
+    Calculate squared Euclidean distances memory-efficiently using 2D matrix operations.
 
     Returns:
         Matrix with shape:
-
             (number_of_points, number_of_centers)
     """
-
-    difference = (
-        points[:, np.newaxis, :]
-        - centers[np.newaxis, :, :]
-    )
-
-    return np.sum(
-        difference * difference,
-        axis=2,
-    )
+    p_sq = np.sum(points * points, axis=1, keepdims=True)
+    c_sq = np.sum(centers * centers, axis=1, keepdims=True).T
+    dists = p_sq + c_sq - 2.0 * np.dot(points, centers.T)
+    return np.maximum(dists, 0.0)
 
 
 # ---------------------------------------------------------------------
@@ -411,10 +404,17 @@ def estimate_number_of_clusters(
     if number_of_points == 1:
         return 1
 
+    # Subsample for noise estimation and cluster search if point count is large
+    if number_of_points > 500:
+        step = max(1, number_of_points // 500)
+        eval_points = points[::step][:500]
+    else:
+        eval_points = points
+
     # Estimate noise scale using nearest-neighbour distances.
     distance_matrix = _squared_distance_matrix(
-        points,
-        points,
+        eval_points,
+        eval_points,
     )
 
     np.fill_diagonal(
@@ -466,7 +466,7 @@ def estimate_number_of_clusters(
     ):
 
         _, _, inertia = _fit_kmeans(
-            points,
+            eval_points,
             cluster_count,
             random_state=42,
             max_iterations=50,
