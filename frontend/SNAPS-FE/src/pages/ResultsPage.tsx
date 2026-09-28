@@ -1,3 +1,4 @@
+import { AnalysisResponse } from "@/services/api";
 import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { ThemeProvider } from "@/lib/theme";
@@ -257,7 +258,7 @@ export function ResultsPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {data.componentResults.map((comp) => (
+                          {data.componentResults.map((comp: NonNullable<AnalysisResponse["componentResults"]>[number]) => (
                             <tr key={comp.componentIndex} className="border-b border-border/50">
                               <td className="py-2 pr-4 text-signal">0{comp.componentIndex}</td>
                               <td className="py-2 pr-4 font-semibold text-foreground">{comp.modulation}</td>
