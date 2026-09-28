@@ -9,6 +9,7 @@ import tempfile
 from backend.schemas.response import AnalysisRequest
 from backend.services.pipeline import analyze_signal
 from project_paths import DATA_ROOT, resolve_sample_paths
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(prefix="/analysis", tags=["Analysis"])
 
@@ -83,7 +84,8 @@ async def upload_and_analyze(
         shutil.copyfileobj(file.file, buffer)
 
     try:
-        results = analyze_signal(
+        results = await run_in_threadpool(
+            analyze_signal,
             file_path_or_samples=str(dest_path),
             sample_rate=sample_rate,
             samples_per_symbol=samples_per_symbol,
