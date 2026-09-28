@@ -6,33 +6,17 @@ import sys
 import types
 from pathlib import Path
 
-# Robustly locate repository root containing project_paths.py across Vercel serverless and local environments
-def _resolve_project_root() -> Path:
-    candidates = [
-        Path.cwd(),
-        Path.cwd().parent,
-        Path(__file__).resolve().parent,
-        Path(__file__).resolve().parent.parent,
-        Path("/vercel/path0"),
-    ]
-    for cand in candidates:
-        curr = cand.resolve()
-        for _ in range(6):
-            if (curr / "project_paths.py").exists():
-                return curr
-            if curr.parent == curr:
-                break
-            curr = curr.parent
-    return Path(__file__).resolve().parent.parent
+# Register backend and synaps_core in sys.path for self-contained execution
+_BACKEND_DIR = Path(__file__).resolve().parent
+_SYNAPS_CORE_DIR = _BACKEND_DIR / "synaps_core"
+_PROJECT_ROOT = _BACKEND_DIR.parent
 
-_PROJECT_ROOT = _resolve_project_root()
-_BACKEND_DIR = _PROJECT_ROOT / "backend" if (_PROJECT_ROOT / "backend").exists() else Path(__file__).resolve().parent
-
-for _p in (_PROJECT_ROOT, _BACKEND_DIR):
-    _p_str = str(_p)
-    if _p_str in sys.path:
-        sys.path.remove(_p_str)
-    sys.path.insert(0, _p_str)
+for _p in (_PROJECT_ROOT, _BACKEND_DIR, _SYNAPS_CORE_DIR):
+    if _p.exists():
+        _p_str = str(_p)
+        if _p_str in sys.path:
+            sys.path.remove(_p_str)
+        sys.path.insert(0, _p_str)
 
 # Ensure 'backend' package is resolvable in sys.modules
 if "backend" not in sys.modules:
