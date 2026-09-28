@@ -63,27 +63,32 @@ async def upload_and_analyze(
     Upload a signal file (.iq or .wav) and execute full analysis in a single step.
     Returns complete visualization and intelligence report structures for frontend.
     """
-    suffix = Path(file.filename).suffix.lower()
+    import traceback
+    from fastapi.encoders import jsonable_encoder
+    from fastapi.responses import JSONResponse
 
-    if suffix not in [".iq", ".wav"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Only .iq and .wav files are supported.",
-        )
-
-    # Vercel's deployed filesystem is read-only.
-    # /tmp is the writable temporary filesystem available to serverless functions.
-    upload_dir = Path(tempfile.gettempdir()) / "synaps_uploads"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
-    # Keep only the filename component to prevent path traversal.
-    safe_filename = Path(file.filename).name
-    dest_path = upload_dir / safe_filename
-
-    with open(dest_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
+    dest_path = None
     try:
+        suffix = Path(file.filename).suffix.lower() if file.filename else ""
+
+        if suffix not in [".iq", ".wav"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Only .iq and .wav files are supported.",
+            )
+
+        # Vercel's deployed filesystem is read-only.
+        # /tmp is the writable temporary filesystem available to serverless functions.
+        upload_dir = Path(tempfile.gettempdir()) / "synaps_uploads"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        # Keep only the filename component to prevent path traversal.
+        safe_filename = Path(file.filename).name
+        dest_path = upload_dir / safe_filename
+
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
         results = await run_in_threadpool(
             analyze_signal,
             file_path_or_samples=str(dest_path),
@@ -91,20 +96,28 @@ async def upload_and_analyze(
             samples_per_symbol=samples_per_symbol,
         )
 
-        return results.get("frontend_data", results.get("report"))
+        response_payload = results.get("frontend_data", results.get("report"))
+        return JSONResponse(content=jsonable_encoder(response_payload))
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(
+        error_trace = traceback.format_exc()
+        print(f"[ERROR in upload_and_analyze]: {e}\n{error_trace}", flush=True)
+        return JSONResponse(
             status_code=500,
-            detail=f"Analysis failed: {e}",
+            content={
+                "error": "Internal server error",
+                "detail": "Signal analysis failed. Please verify the uploaded file and parameters.",
+            },
         )
-
     finally:
         # Remove the temporary upload after analysis completes.
-        try:
-            dest_path.unlink(missing_ok=True)
-        except Exception:
-            pass
+        if dest_path is not None:
+            try:
+                dest_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 @router.post("/sample")
