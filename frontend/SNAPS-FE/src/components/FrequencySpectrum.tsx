@@ -102,14 +102,14 @@ export function FrequencySpectrum({
 
   const middle =
     frequencies?.[
-      Math.floor((frequencies.length - 1) / 2)
+    Math.floor((frequencies.length - 1) / 2)
     ] ?? 0;
 
   const last =
     frequencies?.[frequencies.length - 1] ?? 0;
 
   return (
-    <div className="border border-border bg-background">
+    <div className="floating-surface overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <p className="label-mono">Frequency spectrum</p>
 

@@ -1,4 +1,4 @@
-# SIH26147 Signal Intelligence
+#  Signal Intelligence
 
 Automated analysis of IQ and WAV files with signal parameter extraction.
 

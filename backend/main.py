@@ -1,13 +1,50 @@
-"""
-FastAPI application entry point for SYNAPS Signal Intelligence Backend.
-"""
+"""FastAPI application entry point for SYNAPS Signal Intelligence Backend."""
+
+import os
+import sys
+import types
+from pathlib import Path
+
+# Register backend and synaps_core in sys.path for self-contained execution
+_BACKEND_DIR = Path(__file__).resolve().parent
+_SYNAPS_CORE_DIR = _BACKEND_DIR / "synaps_core"
+_PROJECT_ROOT = _BACKEND_DIR.parent
+
+for _p in (_PROJECT_ROOT, _BACKEND_DIR, _SYNAPS_CORE_DIR):
+    if _p.exists():
+        _p_str = str(_p)
+        if _p_str in sys.path:
+            sys.path.remove(_p_str)
+        sys.path.insert(0, _p_str)
+
+# Ensure 'backend' package is resolvable in sys.modules
+if "backend" not in sys.modules:
+    try:
+        import importlib
+
+        importlib.import_module("backend")
+    except ModuleNotFoundError:
+        _backend_pkg = types.ModuleType("backend")
+        _backend_pkg.__path__ = [str(_BACKEND_DIR)]
+        _backend_pkg.__file__ = str(_BACKEND_DIR / "__init__.py")
+        sys.modules["backend"] = _backend_pkg
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Read allowed origins from environment.
+# FRONTEND_ORIGINS can be a comma-separated list.
+_raw_origins = os.getenv(
+    "FRONTEND_ORIGINS",
+    "https://synaps-black.vercel.app,https://synapsintelligence.netlify.app,http://localhost:5173",
+)
+
+_ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 from backend.api.signal import router as signal_router
 from backend.api.analysis import router as analysis_router
 from backend.api.report import router as report_router
+from backend.api.copilot import router as copilot_router
 from backend.schemas.response import HealthResponse
 from backend.services.pipeline import default_pipeline
 
@@ -17,26 +54,42 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS middleware for frontend access
+# CORS middleware for frontend access.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import traceback
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    error_trace = traceback.format_exc()
+    print(f"[UNHANDLED EXCEPTION on {request.url.path}]: {exc}\n{error_trace}", flush=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "detail": "An unexpected error occurred while processing the request.",
+        },
+    )
+
 # Mount API routers
 app.include_router(signal_router)
 app.include_router(analysis_router)
 app.include_router(report_router)
+app.include_router(copilot_router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 def health_check():
-    """
-    Service health and status endpoint.
-    """
+    """Service health and status endpoint."""
     return HealthResponse(
         status="ONLINE",
         service="SYNAPS Signal Intelligence Platform",
@@ -56,4 +109,10 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+
+    uvicorn.run(
+        "backend.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+    )

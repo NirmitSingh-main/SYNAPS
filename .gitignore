@@ -100,6 +100,8 @@ dist/
 *.keras
 *.pt
 *.pth
+!ai/models/transformer.pth
+!ai_service/models/transformer.pth
 *.onnx
 
 # ============================================================
@@ -136,3 +138,6 @@ flowchart.txt
 learning.txt
 terminal.txt
 fix.txt
+newdata.txt
+olddata.txt
+frontend/SNAPS-FE/tsconfig.tsbuildinfo

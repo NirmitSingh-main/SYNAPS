@@ -1,0 +1,3 @@
+"""
+SYNAPS Backend API package.
+"""

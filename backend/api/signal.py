@@ -23,15 +23,16 @@ async def upload_signal(file: UploadFile = File(...)):
     if suffix not in [".iq", ".wav"]:
         raise HTTPException(status_code=400, detail="Only .iq and .wav files are supported.")
 
-    upload_dir = DATA_ROOT / "uploads"
+    upload_dir = Path(tempfile.gettempdir()) / "synaps_uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    dest_path = upload_dir / file.filename
+    safe_filename = Path(file.filename).name
+    dest_path = upload_dir / safe_filename
     with open(dest_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     return {
-        "filename": file.filename,
+        "filename": safe_filename,
         "saved_path": str(dest_path),
         "format": suffix[1:].upper(),
         "size_bytes": dest_path.stat().st_size,
@@ -74,12 +75,12 @@ def list_sample_signals():
     """
     List preloaded dataset sample signals for quick testing in the UI.
     """
-    from project_paths import CLASS_NAMES, IQ_ROOT, WAV_ROOT
+    from project_paths import CLASS_NAMES, get_class_iq_dir, get_class_wav_dir
     samples_list = []
 
     for c in CLASS_NAMES:
-        iq_dir = IQ_ROOT / c
-        wav_dir = WAV_ROOT / c
+        iq_dir = get_class_iq_dir(c)
+        wav_dir = get_class_wav_dir(c)
 
         if iq_dir.exists():
             for f in sorted(list(iq_dir.glob("*.iq")))[:5]:

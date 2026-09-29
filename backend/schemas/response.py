@@ -18,6 +18,7 @@ class ModulationPrediction(BaseModel):
     confidence_pct: float
     detection_status: str
     probabilities: Dict[str, float]
+    detected_components: Optional[List[str]] = None
 
 
 class DspMetrics(BaseModel):
@@ -33,7 +34,19 @@ class RecoveryPipelineSummary(BaseModel):
     recovered_symbols: int
     recovered_bits: int
     decoded_message: Optional[str] = None
+    decoding_status: Optional[str] = None
+    fec_status: Optional[str] = "NOT_CONFIGURED"
     payload_entropy: float
+
+
+class BitRecoverySummary(BaseModel):
+    validation_status: str
+    reference_bit_count: Optional[int] = None
+    recovered_bit_count: Optional[int] = None
+    matched_bit_count: Optional[int] = None
+    bit_accuracy_pct: Optional[float] = None
+    ber: Optional[float] = None
+    component_recovery: Optional[List[Dict[str, Any]]] = None
 
 
 class IntelligenceReportResponse(BaseModel):
@@ -43,11 +56,14 @@ class IntelligenceReportResponse(BaseModel):
     format: Optional[str] = None
     sample_count: int
     sample_rate_hz: float
+    signal_type: Optional[str] = "SINGLE"
     modulation_decision: ModulationPrediction
     dsp_metrics: DspMetrics
     recovery_pipeline: RecoveryPipelineSummary
+    bit_recovery: Optional[BitRecoverySummary] = None
     emitter_fingerprint: Dict[str, Any]
     evidence_summary: Dict[str, Any]
+    component_results: Optional[List[Dict[str, Any]]] = None
 
 
 class HealthResponse(BaseModel):

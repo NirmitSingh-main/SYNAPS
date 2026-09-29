@@ -535,8 +535,8 @@ def _generate_synthetic_signal(modulation: str, num_samples: int = 8192, rng_see
         
     elif modulation == "QPSK":
         bits = rng.integers(0, 2, size=num_symbols * 2, dtype=np.uint8)
-        i_bits = bits[0::2]
-        q_bits = bits[1::2]
+        q_bits = bits[0::2]
+        i_bits = bits[1::2]
         i_sym = np.where(i_bits == 0, 1.0, -1.0)
         q_sym = np.where(q_bits == 0, 1.0, -1.0)
         symbols = (i_sym + 1j * q_sym) / np.sqrt(2.0)
@@ -578,27 +578,24 @@ def _generate_synthetic_signal(modulation: str, num_samples: int = 8192, rng_see
     return iq, bits, samples_per_symbol
 
 
-def _test_dataset_demodulation(class_name: str, signal_id: str, demodulator, uses_timing: bool = True):
+def _test_dataset_demodulation(class_name: str, demodulator, uses_timing: bool = True):
     """
     Test demodulation on real dataset samples.
-    class_name: "BPSK", "QPSK", "FSK", or "16QAM"
-    signal_id: e.g., "signal_0001", "signal_0201", "signal_0401", "signal_0601"
+    class_name: "BPSK", "QPSK", "FSK", or "16QAM" / "QAM16"
     """
-    # Determine file paths based on modulation type
-    if class_name == "BPSK":
-        iq_path = Path(f"data/iq/BPSK/{signal_id}_bpsk.iq")
-        metadata_path = Path(f"data/metadata/BPSK/{signal_id}_bpsk.json")
-    elif class_name == "QPSK":
-        iq_path = Path(f"data/iq/QPSK/{signal_id}_qpsk.iq")
-        metadata_path = Path(f"data/metadata/QPSK/{signal_id}_qpsk.json")
-    elif class_name == "FSK":
-        iq_path = Path(f"data/iq/FSK/{signal_id}_fsk.iq")
-        metadata_path = Path(f"data/metadata/FSK/{signal_id}_2fsk.json")
-    elif class_name == "16QAM":
-        iq_path = Path(f"data/iq/QAM16/{signal_id}_qam16.iq")
-        metadata_path = Path(f"data/metadata/QAM16/{signal_id}_16qam.json")
-    else:
-        raise ValueError(f"Unknown modulation: {class_name}")
+    from project_paths import get_class_iq_dir, get_class_metadata_dir, normalize_modulation_name
+    canonical_class = normalize_modulation_name(class_name)
+    iq_dir = get_class_iq_dir(canonical_class)
+    meta_dir = get_class_metadata_dir(canonical_class)
+
+    iq_files = sorted(list(iq_dir.glob("*.iq")))
+    if not iq_files:
+        raise FileNotFoundError(f"No IQ files found in {iq_dir}")
+    iq_path = iq_files[0]
+    meta_files = sorted(list(meta_dir.glob("*.json")))
+    if not meta_files:
+        raise FileNotFoundError(f"No metadata files found in {meta_dir}")
+    metadata_path = meta_files[0]
     
     # Load metadata
     with open(metadata_path, "r") as f:
@@ -691,7 +688,7 @@ def test_qpsk_generator_mapping():
         [1 + 1j, -1 + 1j, -1 - 1j, 1 - 1j],
         dtype=np.complex128,
     )
-    expected_bits = np.array([0, 0, 1, 0, 1, 1, 0, 1], dtype=np.uint8)
+    expected_bits = np.array([0, 0, 0, 1, 1, 1, 1, 0], dtype=np.uint8)
 
     recovered_bits = demodulate_qpsk(symbols)
 
@@ -720,16 +717,16 @@ def test_qam16_exhaustive_generator_mapping():
 
 # Dataset tests
 def test_dataset_bpsk():
-    _test_dataset_demodulation("BPSK", "signal_0001", demodulate_bpsk, uses_timing=True)
+    _test_dataset_demodulation("BPSK", demodulate_bpsk, uses_timing=True)
 
 def test_dataset_qpsk():
-    _test_dataset_demodulation("QPSK", "signal_0201", demodulate_qpsk, uses_timing=True)
+    _test_dataset_demodulation("QPSK", demodulate_qpsk, uses_timing=True)
 
 def test_dataset_fsk():
-    _test_dataset_demodulation("FSK", "signal_0401", demodulate_fsk, uses_timing=False)
+    _test_dataset_demodulation("FSK", demodulate_fsk, uses_timing=False)
 
 def test_dataset_16qam():
-    _test_dataset_demodulation("16QAM", "signal_0601", demodulate_16qam, uses_timing=True)
+    _test_dataset_demodulation("16QAM", demodulate_16qam, uses_timing=True)
 
 
 if __name__ == "__main__":

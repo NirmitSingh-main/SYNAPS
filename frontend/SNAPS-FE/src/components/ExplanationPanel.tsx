@@ -5,7 +5,7 @@ interface ExplanationPanelProps {
 
 export function ExplanationPanel({ text, isDemoData = true }: ExplanationPanelProps) {
   return (
-    <div className="border border-border bg-background">
+    <div className="floating-surface overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <p className="label-mono">Analysis explanation</p>
         {isDemoData && (

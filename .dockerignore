@@ -1,0 +1,13 @@
+data/
+experiments/
+result/
+scripts/
+frontend/
+backend/
+.git/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.tmp
+*.log

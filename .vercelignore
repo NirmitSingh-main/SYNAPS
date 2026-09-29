@@ -1,0 +1,64 @@
+# ============================================================
+# SYNAPS — root .vercelignore
+#
+# Both Vercel projects (frontend "synaps" and backend
+# "synaps-backend") read this file from the repo root.
+#
+# IMPORTANT: use leading "/" to anchor patterns to the repo
+# root so they cannot accidentally match nested paths such as
+# frontend/SNAPS-FE/src/data/ or backend/synaps_core/data/.
+#
+# The frontend project only uploads frontend/SNAPS-FE/** (its
+# Root Directory), so patterns like "/backend" have no effect
+# on it. The backend project only uploads backend/**, so
+# "/frontend" has no effect on it either. This file is safe
+# for both projects.
+# ============================================================
+
+# Training dataset (IQ + WAV files, ~466 MB)
+/data/
+
+# Training experiment outputs
+/experiments/
+
+# Training result logs
+/result/
+
+# Dataset generation / utility scripts
+/scripts/
+
+# AI service (separate deployment, not part of either project)
+/ai_service/
+
+# Model weights — gitignored anyway, but belt-and-suspenders
+*.pth
+*.pt
+*.onnx
+*.h5
+*.keras
+*.pkl
+*.joblib
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Node artefacts (already in per-project .vercelignores too)
+node_modules/
+dist/
+build/
+.next/
+
+# Local dev files
+*.log
+*.tmp
+.env
+.env.*
+!.env.example
+!.env.production

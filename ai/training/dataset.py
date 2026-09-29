@@ -5,17 +5,17 @@ import torch
 from torch.utils.data import Dataset
 
 from ai.preprocessing.iq_loader import load_iq_file
-from ai.features.learned_features import prepare_iq_features
+from ai.features.learned_features import prepare_iq_features, tokenize_signal_features
+from project_paths import (
+    CLASS_NAMES,
+    CLASS_TO_INDEX,
+    NUM_CLASSES,
+    get_class_iq_dir,
+)
 
 
-CLASS_NAMES = ["BPSK", "QPSK", "FSK", "QAM16"]
-
-CLASS_TO_INDEX = {
-    "BPSK": 0,
-    "QPSK": 1,
-    "FSK": 2,
-    "QAM16": 3,
-}
+NUM_TOKENS = 256
+SEQUENCE_LENGTH = NUM_TOKENS
 
 
 class IQSignalDataset(Dataset):
@@ -23,17 +23,21 @@ class IQSignalDataset(Dataset):
     Dataset for modulation classification.
 
     Loads IQ files and converts them into
-    [I, Q, magnitude, phase] features.
+    [I, Q, magnitude, phase, diff_phase_cos, diff_phase_sin] features tokenized into NUM_TOKENS windows.
+
+    Supports 5 classes: BPSK, QPSK, FSK, QAM16, MIXED.
     """
 
-    def __init__(self, root="data/iq", sequence_length=1000):
-        self.root = Path(root)
-        self.sequence_length = sequence_length
+    def __init__(self, root=None, num_tokens=NUM_TOKENS):
+        self.num_tokens = num_tokens
 
         self.samples = []
 
         for class_name in CLASS_NAMES:
-            class_dir = self.root / class_name
+            if root is not None:
+                class_dir = Path(root) / class_name
+            else:
+                class_dir = get_class_iq_dir(class_name)
 
             if not class_dir.exists():
                 raise FileNotFoundError(
@@ -58,22 +62,10 @@ class IQSignalDataset(Dataset):
         iq_file, label = self.samples[index]
 
         iq = load_iq_file(iq_file)
-
         features = prepare_iq_features(iq)
+        tokens = tokenize_signal_features(features, num_tokens=self.num_tokens)
 
-        # Fixed sequence length for Transformer
-        if len(features) >= self.sequence_length:
-            features = features[:self.sequence_length]
-        else:
-            padded = np.zeros(
-                (self.sequence_length, features.shape[1]),
-                dtype=np.float32,
-            )
-
-            padded[:len(features)] = features
-            features = padded
-
-        x = torch.tensor(features, dtype=torch.float32)
+        x = torch.tensor(tokens, dtype=torch.float32)
         y = torch.tensor(label, dtype=torch.long)
 
         return x, y
@@ -103,4 +95,3 @@ if __name__ == "__main__":
     print("Label:", y.item())
     print("Class:", CLASS_NAMES[y.item()])
     print("Feature dtype:", x.dtype)
-    

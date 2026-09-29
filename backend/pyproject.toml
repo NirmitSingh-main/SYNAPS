@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synaps-backend"
+version = "1.0.0"
+description = "SYNAPS Signal Intelligence API"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.10.0",
+    "python-multipart>=0.0.20",
+    "python-dotenv>=1.0.1",
+    "groq>=0.18.0",
+    "httpx>=0.28.0",
+    "numpy>=2.0.0",
+    "scipy>=1.14.0",
+]
+
+# ---------------------------------------------------------------------------
+# setuptools package discovery
+# Explicitly list packages so setuptools does NOT use flat-layout auto-
+# discovery (which errors when it finds multiple top-level packages).
+# py-modules includes main.py as a standalone module.
+# packages lists all sub-packages that make up the backend.
+# Nothing from data/, experiments/, result/, scripts/, or frontend/ is
+# included.
+# ---------------------------------------------------------------------------
+[tool.setuptools]
+py-modules = ["main"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["api*", "copilot*", "schemas*", "services*", "synaps_core*"]
+exclude = ["data*", "experiments*", "result*", "scripts*", "frontend*", "tests*"]

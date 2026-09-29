@@ -4,17 +4,26 @@ from pathlib import Path
 from torch.utils.data import TensorDataset, DataLoader
 
 from ai.training.train import (
-    find_dataset,
-    build_dataset,
-    stratified_split,
-    CLASS_NAMES,
-    SEQUENCE_LENGTH,
+    load_dataset_csv,
+    split_dataset,
+    build_split_arrays,
+    NUM_TOKENS,
 )
 from ai.models.transformer import SignalTransformer
+from ai.training.metrics import (
+    calculate_confusion_matrix,
+    calculate_per_class_metrics,
+)
+from project_paths import (
+    CLASS_NAMES,
+    NUM_CLASSES,
+    TRANSFORMER_CHECKPOINT,
+    TRANSFORMER_RESULT_DIR,
+)
 
 
-MODEL_PATH = Path("ai/models/transformer.pth")
-RESULT_DIR = Path("result/transformer")
+MODEL_PATH = TRANSFORMER_CHECKPOINT
+RESULT_DIR = TRANSFORMER_RESULT_DIR
 
 
 def main():
@@ -24,39 +33,20 @@ def main():
     print("==============================")
 
     # --------------------------------------------------
-    # Load existing dataset
+    # Load existing dataset using CSV splits
     # --------------------------------------------------
 
-    dataset = find_dataset()
+    dataset_all = load_dataset_csv()
+    train_samples, val_samples, test_samples = split_dataset(dataset_all)
 
-    X, y = build_dataset(dataset)
-
-    (
-        X_train,
-        y_train,
-        X_validation,
-        y_validation,
-        X_test,
-        y_test,
-    ) = stratified_split(X, y)
+    X_test, y_test = build_split_arrays(
+        test_samples,
+        num_tokens=NUM_TOKENS,
+        split_name="test",
+    )
 
     print("\nTest samples:", len(X_test))
     print("Test shape:", X_test.shape)
-
-    # --------------------------------------------------
-    # Test DataLoader
-    # --------------------------------------------------
-
-    test_dataset = TensorDataset(
-        torch.tensor(X_test, dtype=torch.float32),
-        torch.tensor(y_test, dtype=torch.long),
-    )
-
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=16,
-        shuffle=False,
-    )
 
     # --------------------------------------------------
     # Device
@@ -77,16 +67,56 @@ def main():
             f"Trained model not found: {MODEL_PATH}"
         )
 
-    model = SignalTransformer()
-    model.load_state_dict(
-        torch.load(
-            MODEL_PATH,
-            map_location=device
-        )
+    # Load checkpoint (supports rich checkpoint, legacy state_dict, and arbitrary feature counts)
+    checkpoint = torch.load(
+        MODEL_PATH,
+        map_location=device,
+        weights_only=False,
     )
+
+    in_features = 6
+    if isinstance(checkpoint, dict) and "input_features" in checkpoint:
+        in_features = checkpoint["input_features"]
+    elif isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        in_proj_w = checkpoint["model_state_dict"].get("input_projection.weight")
+        if in_proj_w is not None:
+            in_features = in_proj_w.shape[1]
+
+    model = SignalTransformer(
+        input_features=in_features,
+        num_classes=NUM_CLASSES,
+    )
+
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+        print(f"Loaded rich checkpoint (epoch {checkpoint.get('epoch', '?')}, in_features={in_features})")
+    else:
+        model.load_state_dict(checkpoint)
+        print(f"Loaded legacy state_dict checkpoint (in_features={in_features})")
 
     model.to(device)
     model.eval()
+
+    # Slice features to match model input dimension if needed
+    if X_test.shape[-1] > in_features:
+        X_eval = X_test[:, :, :in_features]
+    else:
+        X_eval = X_test
+
+    # --------------------------------------------------
+    # Test DataLoader
+    # --------------------------------------------------
+
+    test_dataset = TensorDataset(
+        torch.tensor(X_eval, dtype=torch.float32),
+        torch.tensor(y_test, dtype=torch.long),
+    )
+
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=16,
+        shuffle=False,
+    )
 
     # --------------------------------------------------
     # Evaluation
@@ -141,53 +171,27 @@ def main():
     ) * 100
 
     # --------------------------------------------------
-    # Confusion Matrix
+    # Confusion Matrix (5 classes)
     # --------------------------------------------------
 
-    confusion_matrix = np.zeros(
-        (len(CLASS_NAMES), len(CLASS_NAMES)),
-        dtype=int
+    all_predictions = np.array(all_predictions)
+    all_labels = np.array(all_labels)
+
+    confusion_matrix = calculate_confusion_matrix(
+        all_predictions,
+        all_labels,
+        num_classes=NUM_CLASSES,
     )
 
-    for true_label, predicted_label in zip(
+    # --------------------------------------------------
+    # Per-class metrics
+    # --------------------------------------------------
+
+    per_class = calculate_per_class_metrics(
+        all_predictions,
         all_labels,
-        all_predictions
-    ):
-        confusion_matrix[
-            true_label,
-            predicted_label
-        ] += 1
-
-    # --------------------------------------------------
-    # Per-class accuracy
-    # --------------------------------------------------
-
-    per_class = {}
-
-    for index, class_name in enumerate(
-        CLASS_NAMES
-    ):
-
-        total = confusion_matrix[
-            index
-        ].sum()
-
-        correct = confusion_matrix[
-            index,
-            index
-        ]
-
-        accuracy = (
-            correct / total * 100
-            if total > 0
-            else 0.0
-        )
-
-        per_class[class_name] = {
-            "correct": int(correct),
-            "total": int(total),
-            "accuracy": accuracy,
-        }
+        CLASS_NAMES,
+    )
 
     # --------------------------------------------------
     # Print results
@@ -205,37 +209,30 @@ def main():
         f"Test Accuracy: {test_accuracy:.2f}%"
     )
 
-    print("\nPer-class accuracy:")
+    print(f"\nPer-class metrics:")
+    print(f"{'Class':>8}  {'Accuracy':>8}  {'Precision':>9}  {'Recall':>8}  {'F1':>8}  {'Count':>6}")
+    print("-" * 60)
 
     for class_name in CLASS_NAMES:
-
         result = per_class[class_name]
-
         print(
-            f"{class_name}: "
-            f"{result['accuracy']:.2f}% "
-            f"({result['correct']}/"
-            f"{result['total']})"
+            f"{class_name:>8}  {result['accuracy']:7.2f}%  {result['precision']:8.2f}%  "
+            f"{result['recall']:7.2f}%  {result['f1_score']:7.2f}%  {result['total']:>5d}"
         )
 
     # --------------------------------------------------
-    # Print confusion matrix
+    # Print confusion matrix (5x5)
     # --------------------------------------------------
 
     print("\n==============================")
     print("CONFUSION MATRIX")
     print("==============================")
 
-    print(
-        "Rows = Actual"
-    )
+    print("Rows = Actual")
+    print("Columns = Predicted\n")
 
     print(
-        "Columns = Predicted\n"
-    )
-
-    print(
-        "             "
+        "         "
         + " ".join(
             f"{name:>8}"
             for name in CLASS_NAMES
@@ -245,12 +242,11 @@ def main():
     for index, class_name in enumerate(
         CLASS_NAMES
     ):
-
         print(
             f"{class_name:>8} "
             + " ".join(
-                f"{value:>8}"
-                for value in confusion_matrix[index]
+                f"{confusion_matrix[index, j]:>8}"
+                for j in range(NUM_CLASSES)
             )
         )
 
@@ -312,7 +308,15 @@ def main():
         )
 
         f.write(
-            f"Dataset samples: {len(dataset)}\n"
+            f"Num classes: {NUM_CLASSES}\n"
+        )
+
+        f.write(
+            f"Classes: {CLASS_NAMES}\n"
+        )
+
+        f.write(
+            f"Dataset samples: {len(dataset_all)}\n"
         )
 
         f.write(
@@ -337,22 +341,26 @@ def main():
         )
 
         f.write(
-            "PER-CLASS ACCURACY\n"
+            "PER-CLASS METRICS\n"
         )
 
         f.write(
-            "------------------\n"
+            "-" * 60 + "\n"
+        )
+
+        f.write(
+            f"{'Class':>8}  {'Accuracy':>8}  {'Precision':>9}  {'Recall':>8}  {'F1':>8}  {'Count':>6}\n"
+        )
+
+        f.write(
+            "-" * 60 + "\n"
         )
 
         for class_name in CLASS_NAMES:
-
             result = per_class[class_name]
-
             f.write(
-                f"{class_name}: "
-                f"{result['accuracy']:.2f}% "
-                f"({result['correct']}/"
-                f"{result['total']})\n"
+                f"{class_name:>8}  {result['accuracy']:7.2f}%  {result['precision']:8.2f}%  "
+                f"{result['recall']:7.2f}%  {result['f1_score']:7.2f}%  {result['total']:>5d}\n"
             )
 
         f.write("\n")
@@ -371,7 +379,7 @@ def main():
         )
 
         f.write(
-            "             "
+            "         "
             + " ".join(
                 f"{name:>8}"
                 for name in CLASS_NAMES
@@ -382,12 +390,11 @@ def main():
         for index, class_name in enumerate(
             CLASS_NAMES
         ):
-
             f.write(
                 f"{class_name:>8} "
                 + " ".join(
-                    f"{value:>8}"
-                    for value in confusion_matrix[index]
+                    f"{confusion_matrix[index, j]:>8}"
+                    for j in range(NUM_CLASSES)
                 )
                 + "\n"
             )

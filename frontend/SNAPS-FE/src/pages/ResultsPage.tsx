@@ -1,3 +1,5 @@
+import { AnalysisResponse } from "@/services/api";
+import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { ThemeProvider } from "@/lib/theme";
 import { Header, Footer } from "@/components/si/Chrome";
@@ -9,12 +11,15 @@ import { Spectrogram } from "@/components/Spectrogram";
 import { FeatureTable } from "@/components/FeatureTable";
 import { PredictionChart } from "@/components/PredictionChart";
 import { ExplanationPanel } from "@/components/ExplanationPanel";
+import { PrintReport } from "@/components/report/PrintReport";
 import { demoAnalysis } from "@/data/demoData";
 import {
   getAnalysisData,
   getAnalysisFile,
   getAnalysisSample,
 } from "@/lib/analysisStore";
+import { useAuth } from "@/lib/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 function formatHz(hz: number): string {
   if (!hz || isNaN(hz)) return "0 Hz";
@@ -34,12 +39,65 @@ function formatCount(n: number): string {
 }
 
 export function ResultsPage() {
+  const { user } = useAuth();
   const liveData = getAnalysisData();
   const file = getAnalysisFile();
   const sampleId = getAnalysisSample();
 
   const data = liveData || demoAnalysis;
   const isLive = !!liveData;
+
+  // Prevent duplicate saves (React StrictMode guard)
+  const savedRef = useRef<unknown>(null);
+
+  useEffect(() => {
+    if (!isLive || !user || !data) return;
+    if (savedRef.current === data) return;
+    savedRef.current = data;
+
+    const currentUser = user;
+
+    async function saveReport() {
+      try {
+        const { error } = await supabase.from("analysis_reports").insert({
+          user_id: currentUser.id,
+          filename: file?.name || data.filename || sampleId || "unknown",
+          format: data.format || "IQ",
+          classification: data.classification,
+          confidence: data.confidence,
+          sample_rate: data.sampleRate,
+          duration: data.duration,
+          bandwidth: data.bandwidth,
+          snr: data.snr,
+          peak_frequency: data.peakFrequency,
+          num_samples: data.numSamples,
+          prediction_breakdown: data.predictionBreakdown,
+          features: data.features,
+          explanation: data.explanation,
+          raw_report: {
+            classification: data.classification,
+            confidence: data.confidence,
+            sampleRate: data.sampleRate,
+            duration: data.duration,
+            bandwidth: data.bandwidth,
+            snr: data.snr,
+            peakFrequency: data.peakFrequency,
+            numSamples: data.numSamples,
+            predictionBreakdown: data.predictionBreakdown,
+            features: data.features,
+            explanation: data.explanation,
+          },
+        });
+        if (error) {
+          console.error("Failed to save analysis report:", error);
+        }
+      } catch (err) {
+        console.error("Failed to save analysis report:", err);
+      }
+    }
+
+    saveReport();
+  }, [isLive, user, data, file, sampleId]);
 
   const metrics = [
     { label: "Sample rate", value: formatHz(data.sampleRate), unit: "" },
@@ -64,7 +122,7 @@ export function ResultsPage() {
       value: formatCount(data.numSamples),
       unit: "",
     },
-    ...(typeof data.recoveredBitCount === "number"
+    ...(typeof data.recoveredBitCount === "number" && data.recoveredBitCount > 0
       ? [
         {
           label: "Recovered Bits",
@@ -85,12 +143,21 @@ export function ResultsPage() {
           unit: "",
         },
       ]
-      : []),
+      : data.recoveredBitCount === null || data.recoveredBitCount === undefined
+        ? [
+          {
+            label: "Recovered Bits",
+            value: "—",
+            unit: "",
+          },
+        ]
+        : []),
   ];
 
   return (
     <ThemeProvider>
-      <div className="relative min-h-screen">
+      {/* Screen Interactive UI */}
+      <div className="screen-only-view relative min-h-screen">
         <Header />
 
         <main className="mx-auto max-w-4xl px-6 pb-32 pt-32">
@@ -107,9 +174,9 @@ export function ResultsPage() {
               {/* Status badge */}
               <div className="shrink-0">
                 <span
-                  className={`inline-block border px-4 py-2 font-mono text-[0.65rem] tracking-[0.14em] ${isLive
-                      ? "border-green-500/40 text-green-400 bg-green-500/10"
-                      : "border-dashed border-border-strong text-muted-foreground"
+                  className={`inline-block rounded-full border px-4 py-2 font-mono text-[0.65rem] tracking-[0.14em] ${isLive
+                    ? "border-green-500/40 text-green-400 bg-green-500/10"
+                    : "border-dashed border-border-strong text-muted-foreground"
                     }`}
                 >
                   {isLive
@@ -140,6 +207,8 @@ export function ResultsPage() {
             <ClassificationCard
               classification={data.classification}
               confidence={data.confidence}
+              signalType={data.signalType}
+              detectedComponents={data.detectedComponents}
               isDemoData={!isLive}
             />
             <SignalMetrics
@@ -147,6 +216,103 @@ export function ResultsPage() {
               isDemoData={!isLive}
             />
           </div>
+
+          {/* ---- Bit Recovery & Component Analysis ---- */}
+          {data.bitRecovery && (
+            <div className="mt-6 floating-surface p-6">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-4">
+                <p className="label-mono">
+                  {data.signalType === "MIXED"
+                    ? "Multi-component signal analysis"
+                    : "Bit recovery & ground-truth validation"}
+                </p>
+                <span
+                  className={`font-mono text-[0.68rem] px-2.5 py-1 border ${data.bitRecovery.validation_status === "VALIDATED"
+                    ? "border-green-500/40 text-green-400 bg-green-500/10"
+                    : (data.bitRecovery.validation_status === "Component bit recovery not validated"
+                      || data.bitRecovery.validation_status === "COMPONENT_RECOVERY_NOT_VALIDATED")
+                      ? "border-signal/40 text-signal bg-signal/10"
+                      : "border-border text-muted-foreground"
+                    }`}
+                >
+                  {data.bitRecovery.validation_status}
+                </span>
+              </div>
+
+              {data.signalType === "MIXED" ? (
+                <div className="mt-4 space-y-4">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Composite multi-carrier signal detected. The waveform is analyzed and preserved intact. Component bit retrieval is not claimed without dedicated separation filtering.
+                  </p>
+                  {data.componentResults && data.componentResults.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left font-mono text-xs">
+                        <thead>
+                          <tr className="border-b border-border text-muted-foreground">
+                            <th className="py-2 pr-4">#</th>
+                            <th className="py-2 pr-4">Component</th>
+                            <th className="py-2 pr-4">Symbol Rate</th>
+                            <th className="py-2 pr-4">Freq Offset</th>
+                            <th className="py-2 pr-4">Placement</th>
+                            <th className="py-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.componentResults.map((comp: NonNullable<AnalysisResponse["componentResults"]>[number]) => (
+                            <tr key={comp.componentIndex} className="border-b border-border/50">
+                              <td className="py-2 pr-4 text-signal">0{comp.componentIndex}</td>
+                              <td className="py-2 pr-4 font-semibold text-foreground">{comp.modulation}</td>
+                              <td className="py-2 pr-4 text-muted-foreground">{comp.symbolRate ? `${(comp.symbolRate / 1e3).toFixed(0)} kBaud` : "—"}</td>
+                              <td className="py-2 pr-4 text-muted-foreground">{comp.frequencyOffset ? `${(comp.frequencyOffset / 1e3).toFixed(1)} kHz` : "0.0 kHz"}</td>
+                              <td className="py-2 pr-4 text-muted-foreground">{comp.frequencyPlacement ? `${(comp.frequencyPlacement / 1e3).toFixed(1)} kHz` : "0.0 kHz"}</td>
+                              <td className="py-2 text-muted-foreground text-[0.7rem]">{comp.status}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-xs">
+                  <div>
+                    <span className="text-muted-foreground block text-[0.65rem] tracking-wider uppercase">Reference Bits</span>
+                    <span className="text-foreground text-sm font-medium">{data.bitRecovery.reference_bit_count ?? "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[0.65rem] tracking-wider uppercase">Recovered Bits</span>
+                    <span className="text-foreground text-sm font-medium">{data.bitRecovery.recovered_bit_count ?? "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[0.65rem] tracking-wider uppercase">Bit Accuracy</span>
+                    <span className="text-foreground text-sm font-medium">
+                      {data.bitRecovery.bit_accuracy_pct !== undefined && data.bitRecovery.bit_accuracy_pct !== null
+                        ? `${data.bitRecovery.bit_accuracy_pct.toFixed(1)}%`
+                        : "—"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[0.65rem] tracking-wider uppercase">Bit Error Rate (BER)</span>
+                    <span className="text-foreground text-sm font-medium">
+                      {data.bitRecovery.ber !== undefined && data.bitRecovery.ber !== null
+                        ? data.bitRecovery.ber.toFixed(4)
+                        : "—"}
+                    </span>
+                  </div>
+                  {data.convertedData && (
+                    <div className="col-span-2 sm:col-span-4 mt-2 pt-3 border-t border-border/60">
+                      <span className="text-muted-foreground block text-[0.65rem] tracking-wider uppercase mb-1">
+                        Decoded Message Payload ({data.dataEncoding || "ASCII"})
+                      </span>
+                      <pre className="p-2.5 bg-muted/30 border border-border/80 font-mono text-xs text-foreground overflow-x-auto whitespace-pre-wrap">
+                        {data.convertedData}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ---- Waveform ---- */}
           <div className="mt-6">
@@ -210,7 +376,7 @@ export function ResultsPage() {
             <button
               type="button"
               onClick={() => window.print()}
-              className="border border-border px-4 py-2 font-mono text-[0.75rem] text-muted-foreground transition-colors duration-200 hover:border-foreground hover:text-foreground"
+              className="border border-border rounded-lg px-4 py-2 font-mono text-[0.75rem] text-muted-foreground transition-colors duration-200 hover:border-foreground hover:text-foreground"
             >
               Export report
             </button>
@@ -218,6 +384,14 @@ export function ResultsPage() {
         </main>
         <Footer />
       </div>
+
+      {/* Dedicated Print Report UI (shown only when printing / saving as PDF) */}
+      <PrintReport
+        data={data}
+        file={file}
+        sampleId={sampleId}
+        isLive={isLive}
+      />
     </ThemeProvider>
   );
 }

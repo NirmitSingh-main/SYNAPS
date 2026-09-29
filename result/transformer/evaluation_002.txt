@@ -1,0 +1,34 @@
+SYNAPS TRANSFORMER EVALUATION
+=============================
+
+Model: C:\Users\HP\Desktop\SYNAPS\ai\models\transformer.pth
+Num classes: 5
+Classes: ['BPSK', 'QPSK', 'FSK', 'QAM16', 'MIXED']
+Dataset samples: 3333
+Test samples: 390
+Test shape: (390, 256, 4)
+Device: cuda
+
+Test Loss: 0.3304
+Test Accuracy: 87.69%
+
+PER-CLASS METRICS
+------------------------------------------------------------
+   Class  Accuracy  Precision    Recall        F1   Count
+------------------------------------------------------------
+    BPSK    86.67%     81.25%    86.67%    83.87%     75
+    QPSK    65.33%     80.33%    65.33%    72.06%     75
+     FSK    92.00%     80.23%    92.00%    85.71%     75
+   QAM16    96.00%     97.30%    96.00%    96.64%     75
+   MIXED    96.67%     97.75%    96.67%    97.21%     90
+
+CONFUSION MATRIX
+----------------
+Rows = Actual, Columns = Predicted
+
+             BPSK     QPSK      FSK    QAM16    MIXED
+    BPSK       65        8        1        1        0
+    QPSK       10       49       13        1        2
+     FSK        2        4       69        0        0
+   QAM16        3        0        0       72        0
+   MIXED        0        0        3        0       87

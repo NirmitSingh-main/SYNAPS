@@ -108,7 +108,7 @@ export function FileUploader({ onFileSelected, onError }: FileUploaderProps) {
           borderColor: isDragging ? "var(--signal)" : "var(--border-strong)",
           backgroundColor: isDragging ? "color-mix(in oklab, var(--signal) 6%, var(--background))" : "var(--background)",
         }}
-        className="relative flex min-h-[280px] cursor-pointer flex-col items-center justify-center gap-5 border border-dashed transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-[320px]"
+        className="relative flex min-h-[280px] cursor-pointer flex-col items-center justify-center gap-5 rounded-xl border border-dashed transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-h-[320px]"
       >
         {/* Subtle corner markers */}
         <span aria-hidden className="pointer-events-none absolute top-3 left-3 h-4 w-4 border-t border-l border-border-strong opacity-60" />
